@@ -73,9 +73,11 @@ export function takeRepaired(): number {
   return n;
 }
 
-function unpack(a: Compact): Reservation {
+/** Accetta sia il testo scritto oggi sia le liste salvate dalle versioni precedenti. */
+function unpack(a: Compact | string): Reservation {
+  const v: Compact = typeof a === "string" ? (JSON.parse(a) as Compact) : a;
   const o: Record<string, unknown> = {};
-  KEYS.forEach((k, i) => (o[k] = a[i]));
+  KEYS.forEach((k, i) => (o[k] = v[i]));
   o.source = "slope";
   o.sourceId = o.id;
   const ok = roomsOk(o.rooms);
