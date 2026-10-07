@@ -55,8 +55,14 @@ const KEYS: (keyof Reservation)[] = [
   "rateName", "payment", "paymentStatus", "paymentDue", "nonRefundable", "repeaterFlag", "checkedIn", "syncedAt",
 ];
 
-function pack(r: Reservation): Compact {
-  return KEYS.map((k) => r[k] as string | number | boolean | null);
+/**
+ * Una prenotazione diventa una riga di testo: i valori nell'ordine di KEYS, in JSON.
+ * Il testo serve perché Firestore non accetta liste dentro liste, e un blocco di
+ * prenotazioni è proprio questo. Le righe restano compatte quanto prima.
+ */
+function pack(r: Reservation): string {
+  return JSON.stringify(KEYS.map((k) => r[k] as string | number | boolean | null));
+}
 }
 let repaired = 0;
 
