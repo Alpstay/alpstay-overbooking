@@ -63,8 +63,7 @@ const KEYS: (keyof Reservation)[] = [
 function pack(r: Reservation): string {
   return JSON.stringify(KEYS.map((k) => r[k] as string | number | boolean | null));
 }
-}
-let repaired = 0;
+}let repaired = 0;
 
 /** Quante prenotazioni salvate avevano un numero di camere impossibile. */
 export function takeRepaired(): number {
