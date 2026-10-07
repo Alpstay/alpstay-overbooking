@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Regole del database della piattaforma Overbooking.
+//
+// Da incollare nella console Firebase: Firestore Database → Regole → Pubblica.
+//
+// Principio: senza utente collegato non si legge e non si scrive niente. Gli account li crea
+// a mano chi amministra la piattaforma (Authentication → Utenti → Aggiungi utente), uno per
+// collaboratore: non esiste registrazione libera, quindi non può entrare chi non è dello staff.
+//
+// Chi entra vede e modifica tutto: la reception lavora sugli stessi dati, è il motivo per cui
+// esiste l'archivio condiviso. Se un giorno servisse distinguere i ruoli — per esempio lasciare
+// le impostazioni alla sola direzione — si aggiunge un documento `staff/{uid}` con il ruolo e lo
+// si legge qui con get(). Finché non serve, questa semplicità è una qualità.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function collegato() {
+      return request.auth != null && request.auth.token.email_verified in [true, false];
+    }
+
+    // Documenti della piattaforma: impostazioni, prenotazioni, lista d'attesa, registro,
+    // corrispondenza, blocchi manuali. Due segmenti: collezione + documento.
+    match /{collezione}/{documento} {
+      allow read, write: if collegato()
+        && collezione in ['config', 'res', 'cases'];
+    }
+
+    // Tutto il resto è chiuso.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

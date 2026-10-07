@@ -1,0 +1,17 @@
+{
+  "name": "alpstay-overbooking",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Piattaforma di gestione overbooking per le tre case AlpStay (Val Gardena), basata sui dati Slope.",
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p .",
+    "build": "node build.mjs",
+    "build:min": "node build.mjs --minify",
+    "dev": "node build.mjs && npx --yes http-server dist -p 5500 -c-1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}
