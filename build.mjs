@@ -6,7 +6,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 const OUT = "dist";
 
 const bundle = await build({
-  entryPoints: ["src/main.ts"],
+  entryPoints: ["main.ts"],
   bundle: true,
   format: "iife",
   target: "es2020",
