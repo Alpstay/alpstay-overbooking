@@ -7,8 +7,8 @@ un accesso. Interroga La Scatola questa attività, via MCP, e lascia il risultat
 repository.
 
 La **password della reception** per cifrare i nomi non sta qui: questo repository è pubblico.
-Viene data nel testo dell'attività pianificata. Se non c'è, si pubblica lo stesso: lo scatto
-senza nomi funziona, mostra le camere invece delle persone.
+Viene data nel testo dell'attività pianificata. Senza password si pubblica lo stesso, ma lo
+scatto mostra le camere invece dei nomi e il controllo delle doppie prenotazioni resta spento.
 
 ## Regole
 
@@ -46,37 +46,36 @@ senza nomi funziona, mostra le camere invece delle persone.
    `day gte G`, `day lte G+190`. Segui `next_cursor` finché non è nullo e controlla che
    `page.returned` sommi a `page.total`. Salva ogni pagina in un file dello scratchpad così
    come arriva.
-3. **Soggiorni**: `query_curated_view` su `curated_operational_stays` con filtri
-   `departure gt G`, `arrival lt G+190`. Stessa cosa con i cursori e i file.
-4. **Saldi e date di prenotazione**: `query_curated_view` su `curated_order_balances`. Da qui
-   vengono `creation_date` (la data di prenotazione, che prima non era interrogabile),
-   `order_total` e `open_balance`.
-5. **Chi è già in casa**: `list_in_house` con `date = G`, una chiamata per casa.
-6. **Ospiti**, solo se nel testo dell'attività c'è la password: `query_curated_view` su
-   `curated_guest_stays` con `stay_end gte G`. Contiene dati personali: non mostrarli, non
-   riassumerli, usa i file così come sono.
-7. **Costruisci**, dalla cartella del repository:
+3. **Prenotazioni**: `query_curated_view` su `curated_reservations` con filtri
+   `departure gt G`, `arrival lt G+190`. È la vista completa: contiene canale, agenzia,
+   importo della singola prenotazione (`room_amount`), data di prenotazione (`creation_date`),
+   stato, e **anche le cancellate**. Non usare `curated_operational_stays`: è un sottoinsieme
+   senza canale né importo.
+4. **Saldi**: `query_curated_view` su `curated_order_balances`, per il saldo aperto per ordine.
+5. **Intestatari**: `query_curated_view` su `curated_reservation_contacts` con filtri
+   `departure gt G`, `arrival lt G+190`. Dà nome, cognome o ragione sociale e lingua di chi ha
+   prenotato. **Contiene dati personali**: non mostrarli, non riassumerli, non scriverli nel
+   riepilogo; usa i file così come sono. Non usare `curated_guest_stays`: contiene solo gli
+   ospiti già registrati al check-in e sulle prenotazioni future è quasi sempre vuota.
+6. **Costruisci**, dalla cartella del repository:
    ```
    python3 tools/costruisci_scatola.py \
-       --disponibilita d1.json,d2.json --soggiorni s1.json,s2.json \
-       --saldi saldi.json --inhouse ih1.json,ih2.json,ih3.json \
-       [--ospiti o1.json --password "<PASSWORD RECEPTION>"] \
+       --disponibilita d1.json,d2.json --prenotazioni p1.json,p2.json \
+       --saldi saldi.json --contatti c1.json,c2.json \
+       --password "<PASSWORD RECEPTION>" \
        --da G --a G+190 > scatola.json
    ```
-   Leggi il resoconto su stderr: le prenotazioni per casa devono essere dell'ordine di
-   grandezza atteso (centinaia, non decine né migliaia) e le tipologie devono essere 3, 3 e 4.
-   Una riga `ATTENZIONE` va capita prima di andare avanti.
-8. **Verifica**: `python3 tools/verifica_scatola.py scatola.json [o1.json ["<PASSWORD>"]]`
-   deve finire con `verifica OK`. Passa i file degli ospiti e la password: è il controllo che
-   nessun nome sia finito in chiaro e che il blocco cifrato si riapra davvero.
-9. **Controllo dei tipi e costruzione**: `npm install && npm run check && npm run build`.
-   Se il controllo dei tipi non passa, non pubblicare: la pubblicazione su Pages si fermerebbe
-   comunque lì.
-10. **Pubblica**: `git add scatola.json`, commit `Scatola G`, `git push origin HEAD:main`.
-    GitHub Actions ricostruisce la pagina e copia lo scatto accanto a lei.
-11. **Riepilogo** in italiano, senza nomi: periodo coperto, prenotazioni per casa, notti in
-    conflitto trovate (le righe con `confirmed_occupied > physical_rooms - closure_count`,
-    sommate per casa), freschezza di La Scatola, e qualunque cosa sia andata storta.
+   Leggi il resoconto su stderr: le prenotazioni per casa devono essere centinaia, le
+   tipologie 3, 3 e 4, e i nomi cifrati devono coprire almeno l'80% delle prenotazioni. Una
+   riga `ATTENZIONE` va capita prima di andare avanti.
+7. **Verifica**: `python3 tools/verifica_scatola.py scatola.json c1.json,c2.json "<PASSWORD>"`
+   deve finire con `verifica OK`. Passa i file degli intestatari e la password: è il controllo
+   che nessun nome, email o telefono sia finito in chiaro e che il blocco cifrato si riapra.
+8. **Controllo dei tipi e costruzione**: `npm install && npm run check && npm run build`.
+   Se il controllo dei tipi non passa, non pubblicare.
+9. **Pubblica**: `git add scatola.json`, commit `Scatola G`, `git push origin HEAD:main`.
+10. **Riepilogo** in italiano, senza nomi: periodo coperto, prenotazioni per casa, notti in
+    conflitto per casa, freschezza di La Scatola, e qualunque cosa sia andata storta.
 
 ## Cosa fa la piattaforma con lo scatto
 
