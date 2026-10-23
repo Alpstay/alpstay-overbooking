@@ -85,6 +85,21 @@ const TABS_ALL: [Tab, string][] = [
 
 const TABS: [Tab, string][] = TABS_ALL.filter(([k]) => IMPORT_ATTIVO || k !== "import");
 
+/**
+ * Un ID di Slope per intero occupa mezza colonna e nessuno lo legge: gli ID di Slope sono UUID
+ * che condividono prefisso e suffisso, quindi a occhio si distinguono solo nel mezzo. Si
+ * mostrano le prime otto cifre, con l'ID intero nel suggerimento e nell'esportazione.
+ * L'ID non viene mai modificato: questo è solo il modo di scriverlo a schermo.
+ */
+export function idSlope(id: string): string {
+  return `<code class="id" title="${esc(id)}">${esc(id.slice(0, 8))}</code>`;
+}
+
+/** Un dato che La Scatola non dà. Scriverlo «0 €» lo farebbe sembrare un valore misurato. */
+export function nonDisponibile(): string {
+  return `<span class="muted" title="Dato non disponibile da La Scatola">—</span>`;
+}
+
 export function hotelName(s: Settings, id: HotelId | "gruppo" | null): string {
   if (id === "gruppo") return "Tutte e tre le case";
   return s.hotels.find((h) => h.id === id)?.name ?? String(id ?? "—");
@@ -286,13 +301,13 @@ export function viewSolve(c: Ctx): string {
     { key: "seq", label: "#", value: (m) => m.seq, align: "right", width: "3rem" },
     { key: "kind", label: "Azione", value: (m) => KIND_LABEL[m.kind], filter: true, render: (m) => `<span class="tag ${m.kind}">${KIND_LABEL[m.kind]}</span>` },
     { key: "hotel", label: "Casa", value: (m) => hotelName(s, m.res.hotelId), filter: true },
-    { key: "id", label: "ID Slope", value: (m) => m.res.id, render: (m) => `<code>${esc(m.res.id)}</code>` },
+    { key: "id", label: "ID Slope", value: (m) => m.res.id, render: (m) => idSlope(m.res.id) },
     { key: "guest", label: "Ospite", value: (m) => m.res.guest },
     { key: "arr", label: "Arrivo", value: (m) => m.res.arrival, render: (m) => fmtDate(m.res.arrival, true) },
     { key: "n", label: "Notti", value: (m) => nights(m.res), align: "right" },
     { key: "rooms", label: "Cam.", value: (m) => m.res.rooms, align: "right" },
-    { key: "ch", label: "Canale", value: (m) => m.res.channel, filter: true },
-    { key: "net", label: "Valore netto", value: (m) => Math.round(m.netValue), align: "right", render: (m) => eur(m.netValue) },
+    { key: "ch", label: "Canale", value: (m) => m.res.channel, filter: true, render: (m) => m.res.channel ? esc(m.res.channel) : nonDisponibile() },
+    { key: "net", label: "Valore netto", value: (m) => Math.round(m.netValue), align: "right", render: (m) => m.res.total ? eur(m.netValue) : nonDisponibile() },
     { key: "note", label: "Destinazione", value: (m) => m.note },
     { key: "why", label: "Perché", value: (m) => m.reason, render: (m) => `<small>${esc(m.reason)}</small>` },
   ];
@@ -326,16 +341,16 @@ export function viewReservations(c: Ctx): string {
   const rows = c.d.list.filter((r) => !c.ui.resFutureOnly || r.departure > today);
   const cols: Column<Reservation>[] = [
     { key: "hotel", label: "Casa", value: (r) => hotelName(s, r.hotelId), filter: true },
-    { key: "id", label: "ID Slope", value: (r) => r.id, render: (r) => `<code>${esc(r.id)}</code>` },
+    { key: "id", label: "ID Slope", value: (r) => r.id, render: (r) => idSlope(r.id) },
     { key: "guest", label: "Ospite", value: (r) => r.guest },
     { key: "arr", label: "Arrivo", value: (r) => r.arrival, render: (r) => fmtDate(r.arrival) },
     { key: "dep", label: "Partenza", value: (r) => r.departure, render: (r) => fmtDate(r.departure) },
     { key: "n", label: "Notti", value: (r) => nights(r), align: "right" },
     { key: "rooms", label: "Cam.", value: (r) => r.rooms, align: "right" },
     { key: "type", label: "Tipologia", value: (r) => r.roomType, filter: true },
-    { key: "ch", label: "Canale", value: (r) => r.channel, filter: true },
+    { key: "ch", label: "Canale", value: (r) => r.channel, filter: true, render: (r) => r.channel ? esc(r.channel) : nonDisponibile() },
     { key: "st", label: "Stato", value: (r) => r.status, filter: true },
-    { key: "tot", label: "Totale", value: (r) => r.total, align: "right", render: (r) => eur(r.total) },
+    { key: "tot", label: "Totale", value: (r) => r.total, align: "right", render: (r) => r.total ? eur(r.total) : nonDisponibile() },
     { key: "net", label: "Netto", value: (r) => Math.round(netValue(s, r)), align: "right", render: (r) => eur(netValue(s, r)) },
     { key: "fix", label: "Fissa", value: (r) => c.d.protector.reasons(r).map((x) => REASON_LABEL[x]).join(", ") || "no", filter: false, render: (r) => c.d.protector.reasons(r).map((x) => `<span class="chip p">${REASON_LABEL[x]}</span>`).join(" ") },
     { key: "lock", label: "Blocca", value: (r) => (c.app.locks[resKey(r)] ? "sì" : ""), render: (r) => (c.app.canWrite ? `<button class="btn sm ${c.app.locks[resKey(r)] ? "gold" : "ghost"}" data-act="lock" data-v="${esc(resKey(r))}" aria-pressed="${!!c.app.locks[resKey(r)]}">${c.app.locks[resKey(r)] ? "Bloccata" : "Blocca"}</button>` : "") },
@@ -633,7 +648,7 @@ function roomSections(c: Ctx, r: SolveResult): string {
     { key: "kind", label: "Tipo", value: (m) => ROOM_KIND[m.kind], filter: true, render: (m) => `<span class="tag rm-${m.kind}">${ROOM_KIND[m.kind]}</span>` },
     { key: "hotel", label: "Casa", value: (m) => hn(m.hotelId), filter: true },
     { key: "guest", label: "Ospite", value: (m) => m.res.guest, render: (m) => `<button class="linkbtn" data-act="detail" data-v="${esc(resKey(m.res))}">${esc(m.res.guest || m.res.id)}</button>` },
-    { key: "id", label: "ID Slope", value: (m) => m.res.id, render: (m) => `<code>${esc(m.res.id)}</code>` },
+    { key: "id", label: "ID Slope", value: (m) => m.res.id, render: (m) => idSlope(m.res.id) },
     { key: "per", label: "Soggiorno", value: (m) => `${m.res.arrival} ${m.res.departure}`, render: (m) => `${fmtDate(m.res.arrival)} → ${fmtDate(m.res.departure)}` },
     { key: "from", label: "Da camera", value: (m) => (m.fromHotel !== m.hotelId ? `${hn(m.fromHotel)} ${m.fromRoom ?? ""}` : m.fromRoom ?? "—"), render: (m) => `<span class="room from">${esc(m.fromRoom ?? "—")}</span>${m.fromHotel !== m.hotelId ? `<small class="muted"> ${esc(hn(m.fromHotel))}</small>` : ""}` },
     { key: "to", label: "A camera", value: (m) => m.toRoom, render: (m) => `<span class="room to">${esc(m.toRoom)}</span>` },
@@ -693,6 +708,20 @@ export function specSection(c: Ctx): string {
   const { aperte: flags, gestite } = specRelevant(c);
   const s = c.app.settings;
   const coda = gestite ? `<p class="muted narrow">${gestite === 1 ? "1 prenotazione è già stata messa" : `${gestite} prenotazioni sono già state messe`} in lista d'attesa e ${gestite === 1 ? "non compare" : "non compaiono"} più qui. <button class="linkbtn" data-act="tab" data-v="attesa">Vai alla lista d'attesa</button></p>` : "";
+  // Senza identità dell'ospite il controllo non può lavorare: dirlo è l'unica risposta onesta.
+  // Mostrare una tabella vuota lascerebbe credere che sia stato fatto e non abbia trovato nulla.
+  const anonime = c.d.list.filter((r) => r.anonimo).length;
+  if (anonime && anonime === c.d.list.length) {
+    return `<h3 class="sec with-info" id="doppie">Doppie prenotazioni ${infoButton("spec", "Come funziona il controllo")}</h3>
+      <div class="warns"><p class="wd">Controllo non disponibile</p><ul>
+        <li>Questo controllo riconosce lo stesso ospite su più prenotazioni, e lo scatto di La
+        Scatola è senza dati personali: al posto del nome c'è il numero di camera.</li>
+        <li>Confrontare i segnaposto darebbe segnalazioni false dall'aria credibile — ogni
+        gruppo sembrerebbe un furbetto — quindi il controllo resta spento invece di indovinare.</li>
+        <li>Si riaccende da solo quando i nomi vengono pubblicati cifrati e aperti con la
+        password della reception.</li>
+      </ul></div>${coda}`;
+  }
   if (!flags.length) return `<h3 class="sec with-info" id="doppie">Doppie prenotazioni ${infoButton("spec", "Come funziona il controllo")}</h3><p class="muted narrow">Nessuna segnalazione aperta. Il controllo confronta ID cliente e nominativo su tutte e tre le case a ogni import.</p>${coda}`;
   const cols: Column<SpecFlag>[] = [
     { key: "lev", label: "Rischio", value: (f) => f.level, filter: true, render: (f) => `<span class="tag ${f.level === "alta" ? "rischio" : "pieno"}">${f.level}</span>` },
@@ -701,15 +730,18 @@ export function specSection(c: Ctx): string {
       : "" },
     { key: "guest", label: "Ospite", value: (f) => f.res.guest, render: (f) => `<button class="linkbtn" data-act="detail" data-v="${esc(resKey(f.res))}">${esc(f.res.guest || f.res.id)}</button>` },
     { key: "hotel", label: "Casa", value: (f) => hotelName(s, f.res.hotelId), filter: true },
-    { key: "id", label: "ID Slope", value: (f) => f.res.id, render: (f) => `<code>${esc(f.res.id)}</code>` },
+    { key: "id", label: "ID Slope", value: (f) => f.res.id, render: (f) => idSlope(f.res.id) },
     { key: "arr", label: "Soggiorno", value: (f) => f.res.arrival, render: (f) => `${fmtDate(f.res.arrival, true)} → ${fmtDate(f.res.departure, true)}` },
     { key: "rooms", label: "Cam.", value: (f) => f.res.rooms, align: "right" },
-    { key: "ch", label: "Canale", value: (f) => f.res.channel, filter: true },
-    { key: "net", label: "Valore netto", value: (f) => Math.round(netValue(s, f.res)), align: "right", render: (f) => eur(netValue(s, f.res)) },
+    { key: "ch", label: "Canale", value: (f) => f.res.channel, filter: true, render: (f) => f.res.channel ? esc(f.res.channel) : nonDisponibile() },
+    { key: "net", label: "Valore netto", value: (f) => Math.round(netValue(s, f.res)), align: "right", render: (f) => f.res.total ? eur(netValue(s, f.res)) : nonDisponibile() },
     { key: "kind", label: "Segnale", value: (f) => SPEC_KIND_LABEL[f.kind], filter: true },
     { key: "canc", label: "Cancellaz. passate", value: (f) => f.pastCancels, align: "right" },
+    // L'elenco completo rendeva la riga alta mezzo schermo e illeggibile: se ne mostrano tre,
+    // il resto si conta. L'elenco intero resta nell'esportazione, dove serve davvero.
     { key: "altre", label: "Le altre prenotazioni", value: (f) => f.others.map((o) => `${hotelName(s, o.hotelId)} ${o.arrival} (${o.id})`).join(" | "),
-      render: (f) => f.others.map((o) => `<span class="chip">${esc(hotelName(s, o.hotelId))} ${fmtDate(o.arrival)}→${fmtDate(o.departure)} <code>${esc(o.id)}</code></span>`).join(" ") },
+      render: (f) => f.others.slice(0, 3).map((o) => `<span class="chip" title="${esc(o.id)}">${esc(hotelName(s, o.hotelId))} ${fmtDate(o.arrival)}→${fmtDate(o.departure)}</span>`).join(" ")
+        + (f.others.length > 3 ? ` <span class="muted"><small>e altre ${f.others.length - 3}</small></span>` : "") },
     { key: "fisso", label: "Protetta", value: (f) => c.d.protector.reasons(f.res).map((x) => REASON_LABEL[x]).join(", ") || "no",
       render: (f) => { const r = c.d.protector.reasons(f.res); return r.length ? r.map((x) => `<span class="chip p">${REASON_LABEL[x]}</span>`).join(" ") : "<span class=\"muted\">no</span>"; } },
   ];
@@ -757,10 +789,10 @@ export function cancelSection(c: Ctx): string {
       : `<div class="row tight"><button class="btn gold sm" data-act="mail-res" data-v="${esc(resKey(x.res))}" data-t="${x.ground === "mancato-pagamento" ? "caparra-sollecito" : "garanzia-sollecito"}">1. Sollecito</button><button class="btn ghost sm" data-act="mail-res" data-v="${esc(resKey(x.res))}" data-t="${x.ground === "mancato-pagamento" ? "caparra-annullo" : "garanzia-annullo"}">2. Annullamento</button></div>` },
     { key: "hotel", label: "Casa", value: (x) => hotelName(s, x.res.hotelId), filter: true },
     { key: "guest", label: "Ospite", value: (x) => x.res.guest, render: (x) => `<button class="linkbtn" data-act="detail" data-v="${esc(resKey(x.res))}">${esc(x.res.guest || x.res.id)}</button>` },
-    { key: "id", label: "ID Slope", value: (x) => x.res.id, render: (x) => `<code>${esc(x.res.id)}</code>` },
+    { key: "id", label: "ID Slope", value: (x) => x.res.id, render: (x) => idSlope(x.res.id) },
     { key: "arr", label: "Soggiorno", value: (x) => x.res.arrival, render: (x) => `${fmtDate(x.res.arrival, true)} → ${fmtDate(x.res.departure, true)}` },
     { key: "cam", label: "Cam.", value: (x) => x.res.rooms, align: "right" },
-    { key: "net", label: "Valore netto", value: (x) => Math.round(netValue(s, x.res)), align: "right", render: (x) => eur(netValue(s, x.res)) },
+    { key: "net", label: "Valore netto", value: (x) => Math.round(netValue(s, x.res)), align: "right", render: (x) => x.res.total ? eur(netValue(s, x.res)) : nonDisponibile() },
     { key: "prova", label: "La prova", value: (x) => x.prova, render: (x) => `<small>${esc(x.prova)}</small>` },
     { key: "entro", label: "Rispondere entro", value: (x) => (x.ground === "camera-inagibile" ? "" : scadenzaRisposta(x)), render: (x) => (x.ground === "camera-inagibile" ? "—" : fmtDate(scadenzaRisposta(x), true)) },
     { key: "p", label: "Protetta", value: (x) => (x.protetta ? "sì" : ""), render: (x) => (x.protetta ? `<span class="chip p">decisione manuale</span>` : "") },

@@ -282,7 +282,11 @@ export function prenotazioniDaScatola(s: ScatolaSnapshot, nomi?: Map<string, str
       children: p.children,
       total: sole && p.orderTotal != null ? p.orderTotal : 0,
       guest: nome ?? (p.room ? `Camera ${p.room}` : `Pren. ${p.id.slice(0, 8)}`),
-      customerId: p.orderId,
+      // L'ordine non è il cliente: un ordine raggruppa le camere prenotate insieme, e lo stesso
+      // cliente può averne molti. Metterlo in `customerId` faceva sembrare ogni gruppo un ospite
+      // che tiene aperte dieci prenotazioni sovrapposte. Il raggruppamento sta in `groupRef`,
+      // che è il campo giusto e che il solver usa per non spezzare le prenotazioni multiple.
+      customerId: null,
       email: "",
       groupRef: p.orderId,
       tags: "",
@@ -293,6 +297,7 @@ export function prenotazioniDaScatola(s: ScatolaSnapshot, nomi?: Map<string, str
       nonRefundable: false,
       repeaterFlag: false,
       checkedIn: p.checkedIn,
+      anonimo: !nome,
       source: "slope",
       sourceId: p.id,
       syncedAt: s.generato,

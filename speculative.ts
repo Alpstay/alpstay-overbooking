@@ -25,8 +25,16 @@ export interface SpecFlag {
   penalty: number;            // 0..1, quanto pesa nella scelta di chi spostare
 }
 
-/** Chiave di identità dell'ospite: ID cliente di Slope, altrimenti nome e cognome. */
+/**
+ * Chiave di identità dell'ospite: ID cliente di Slope, altrimenti nome e cognome.
+ *
+ * Senza identità non c'è chiave, e quindi non c'è confronto. È il caso dello scatto di La
+ * Scatola, che è senza dati personali: il nome mostrato è un segnaposto come «Camera 209» e
+ * due segnaposto uguali non vogliono dire due volte la stessa persona. Confrontarli
+ * produrrebbe segnalazioni false e dall'aria credibile, che è il modo peggiore di sbagliare.
+ */
 export function guestKey(r: Reservation): string | null {
+  if (r.anonimo) return null;
   if (r.customerId && r.customerId.trim()) return "c:" + normText(r.customerId);
   const n = normText(r.guest);
   return n.split(" ").filter(Boolean).length >= 2 ? "n:" + n : null;

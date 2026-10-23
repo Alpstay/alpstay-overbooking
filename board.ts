@@ -273,7 +273,7 @@ export function detailSheet(c: Ctx, key: string | null): string {
   const row = (l: string, v: string): string => `<div><dt>${l}</dt><dd>${v}</dd></div>`;
   return `<div class="sheet-bg" data-act="detail-close"></div>
   <aside class="sheet" role="dialog" aria-label="Dettaglio prenotazione">
-    <header><div><h3>${esc(res.guest || res.id)}</h3><code>${esc(res.id)}</code></div><button class="btn ghost sm" data-act="detail-close">Chiudi</button></header>
+    <header><div><h3>${esc(res.guest || res.id)}</h3><code class="id" title="${esc(res.id)}">${esc(res.id.slice(0, 8))}</code></div><button class="btn ghost sm" data-act="detail-close">Chiudi</button></header>
     ${(() => { const sp = c.d.spec.byRes.get(key); return sp ? `<p class="mv spec ${sp.level}"><b>Doppia prenotazione — rischio ${sp.level}</b><br><small>${esc(sp.note)}</small></p>` : ""; })()}
     ${move ? `<p class="mv k-${move.kind === "walk" ? "walk" : move.kind === "riprotezione" ? "entrata" : "upgrade"}"><b>${move.seq}. ${esc(move.note)}</b><br><small>${esc(move.reason)}</small></p>` : ""}
     <dl>

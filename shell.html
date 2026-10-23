@@ -36,6 +36,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:520px;z-index:-1;po
 h1,h2,h3,h4{font-family:Oswald,Jost,"Helvetica Neue",Arial,sans-serif;font-weight:500;color:var(--ink);margin:0;letter-spacing:.04em}
 h1,h3.sec,.card h3,.sheet h3{text-transform:uppercase}
 code{font:12px/1.3 ui-monospace,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:4px}
+/* Gli ID di Slope si mostrano accorciati: per intero mandavano a capo e alzavano la riga. */
+code.id{white-space:nowrap;cursor:help}
 small{font-size:12px}
 .muted{color:var(--muted)}
 .gold{color:var(--gold-ink)}

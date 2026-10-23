@@ -38,6 +38,13 @@ export interface Reservation {
   nonRefundable: boolean;
   repeaterFlag: boolean;
   checkedIn: boolean;
+  /**
+   * Vero quando l'identità dell'ospite non è disponibile — tipicamente con lo scatto di La
+   * Scatola, che è senza dati personali. Non è un dettaglio estetico: i controlli che
+   * confrontano gli ospiti fra loro (doppie prenotazioni, ospiti abituali) devono spegnersi,
+   * perché su nomi segnaposto darebbero segnalazioni false e convincenti.
+   */
+  anonimo?: boolean;
   source: "slope";
   sourceId: string;           // = id
   syncedAt: string;           // ISO datetime
