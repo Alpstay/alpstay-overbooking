@@ -1,3 +1,5 @@
 node_modules/
 dist/
 *.tmp.*
+# Gli scatti di prova si chiamano cosi: scatola.json e il file pubblicato, non si tocca.
+scatola.prova.json

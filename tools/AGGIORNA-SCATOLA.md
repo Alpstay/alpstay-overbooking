@@ -22,6 +22,10 @@ scatto mostra le camere invece dei nomi e il controllo delle doppie prenotazioni
 - Se La Scatola non risponde, dà zero righe, o `verifica_scatola.py` fallisce: **non
   pubblicare**. Online resta lo scatto di ieri, che è utilizzabile; uno scatto sbagliato no.
 - Se `git push` viene rifiutato, non insistere: riportalo nel riepilogo.
+- **`scatola.json` non si cancella mai dal repository.** È il file che tiene in piedi la pagina
+  online: senza, la piattaforma torna ai dati dimostrativi. In particolare non usare
+  `git add -A` dopo aver rimosso file in locale — si aggiungono i file per nome. Gli scatti di
+  prova vanno chiamati `scatola.prova.json`, che è ignorato da git.
 
 ## Dati
 

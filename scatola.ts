@@ -134,6 +134,13 @@ function valida(j: unknown): EsitoScatola {
   if (!generato) return { snapshot: null, errore: "scatola.json non dice quando è stato generato." };
   if (!Array.isArray(o.case) || o.case.length === 0) return { snapshot: null, errore: "scatola.json non contiene nessuna casa." };
   if (!Array.isArray(o.prenotazioni)) return { snapshot: null, errore: "scatola.json non contiene l'elenco delle prenotazioni." };
+  // Uno scatto di una versione precedente non ha `stato` né `canale`. Letto come se li avesse,
+  // diventerebbe un elenco di prenotazioni tutte in opzione e senza canale: numeri sbagliati e
+  // dall'aria normale. Meglio rifiutarlo e lavorare su quello che c'è già.
+  const prima = o.prenotazioni[0] as Record<string, unknown> | undefined;
+  if (prima && !("stato" in prima)) {
+    return { snapshot: null, errore: "scatola.json è in un formato più vecchio di questa pagina: non lo uso, aspetto l'aggiornamento di stanotte." };
+  }
   if (!Array.isArray(o.capienza)) return { snapshot: null, errore: "scatola.json non contiene la capienza per notte." };
 
   const fin = (o.finestra ?? {}) as Record<string, unknown>;
