@@ -2,13 +2,14 @@
  * Configurazione del progetto Firebase.
  *
  * I sei valori si prendono dalla console Firebase:
- *   ⚙ Impostazioni → Generali → Le tue app → app Web → blocco firebaseConfig.
+ *   ⚙ Impostazioni progetto → Le tue app → app Web → blocco firebaseConfig.
  *
- * Non sono segreti: nelle applicazioni web Firebase li espone per costruzione. La sicurezza la
- * fanno due cose: il login con email e password, e le regole in `firestore.rules`, che senza
- * utente autenticato non lasciano leggere né scrivere niente.
+ * Non sono segreti: nelle applicazioni web Firebase li espone per costruzione, e in questo
+ * repository pubblico stanno nel codice come ovunque altrove. La sicurezza la fanno due cose:
+ * il login con email e password, e le regole in `firestore.rules`, che senza utente autenticato
+ * non lasciano leggere né scrivere niente.
  *
- * Con i campi vuoti la piattaforma non chiede nessun accesso e salva nel browser.
+ * Con i campi vuoti la piattaforma non chiede nessun accesso e salva nel browser, come prima.
  */
 export interface FirebaseConfig {
   apiKey: string;

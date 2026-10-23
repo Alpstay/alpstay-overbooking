@@ -8,6 +8,7 @@ import { forecastGroup, forecastHotel } from "./forecast";
 import { solve } from "./solver";
 import { detectSpeculative } from "./speculative";
 import { detectCancellable } from "./cancellable";
+import { caricaScatola, prenotazioniDaScatola } from "./scatola";
 import { demoReservations } from "./demo";
 import { buildScenario } from "./scenario";
 import { buildSampleRows, buildLegendRows } from "./sample";
@@ -63,6 +64,8 @@ let derived: Derived | null = null;
 const ui: UIState = {
   tab: "guida",
   roomsFixed: 0,
+  scatola: null,
+  scatolaErrore: null,
   hotel: "saslong",
   solveFrom: todayISO(),
   solveDays: 14,
@@ -259,7 +262,33 @@ async function loadAll(): Promise<void> {
       } catch { /* la correzione vale comunque per questa sessione */ }
     }
   }
+  await caricaDaScatola();
   invalidate();
+}
+
+/**
+ * Lo scatto di La Scatola, se è stato pubblicato accanto alla pagina.
+ *
+ * Sostituisce le prenotazioni in memoria e **non viene salvato**: viene riletto a ogni
+ * apertura e il giorno dopo è rimpiazzato da quello nuovo. Così non esistono due verità da
+ * tenere allineate, e non si rischia di decidere su un residuo di tre giorni fa rimasto
+ * nell'archivio. Impostazioni, lista d'attesa, registro e corrispondenza restano dove sono:
+ * quelli sono lavoro della reception, non dati di Slope.
+ *
+ * Se lo scatto non c'è, o non è valido, la piattaforma continua con quello che aveva già.
+ */
+async function caricaDaScatola(): Promise<void> {
+  const { snapshot, errore } = await caricaScatola();
+  ui.scatola = snapshot;
+  ui.scatolaErrore = errore;
+  if (!snapshot) return;
+  const list = prenotazioniDaScatola(snapshot);
+  if (!list.length) {
+    ui.scatolaErrore = "Lo scatto di La Scatola non contiene prenotazioni: non lo uso.";
+    ui.scatola = null;
+    return;
+  }
+  app.reservations = new Map(list.map((r) => [resKey(r), r]));
 }
 
 // ------------------------------------------------------------ azioni

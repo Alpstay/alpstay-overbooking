@@ -19,6 +19,8 @@ import type { InfoKey } from "./info";
 import type { MailState } from "./waitlist";
 import { esc, eur, fmtDate, nights, pct, todayISO, addDays, tagList } from "./util";
 import { utenteCorrente } from "./firebase";
+import type { ScatolaSnapshot } from "./scatola";
+import { avvisoScatola, etaOre } from "./scatola";
 
 export const MAX_SOLVE_NIGHTS = 90;
 
@@ -39,6 +41,10 @@ export interface UIState {
   tab: Tab;
   /** Prenotazioni salvate con un numero di camere impossibile, corrette in lettura. */
   roomsFixed: number;
+  /** Lo scatto di La Scatola pubblicato accanto alla pagina, se c'è. */
+  scatola: ScatolaSnapshot | null;
+  /** Perché lo scatto non è stato usato, da mostrare così com'è. */
+  scatolaErrore: string | null;
   hotel: HotelId | "gruppo";
   solveFrom: string;
   solveDays: number;
@@ -84,6 +90,60 @@ export function hotelName(s: Settings, id: HotelId | "gruppo" | null): string {
   return s.hotels.find((h) => h.id === id)?.name ?? String(id ?? "—");
 }
 
+/**
+ * Da dove vengono i numeri che si stanno guardando. Sta in testa a ogni pagina perché è la
+ * prima cosa da sapere prima di spostare un ospite, e perché i tre casi — scatto di La
+ * Scatola, import di Slope, dati inventati — non vanno confusi tra loro.
+ */
+function fonteDati(c: Ctx, li: { at: string } | null): string {
+  const s = c.ui.scatola;
+  if (s) {
+    const ore = etaOre(s);
+    const vecchio = !Number.isFinite(ore) || ore >= 36 || s.freschezza.stato === "failing";
+    return `<span class="fonte ${vecchio ? "stale" : "ok"}">La Scatola — scatto del ` +
+      `${fmtDate(s.generato.slice(0, 10))}, ${s.generato.slice(11, 16)}</span>`;
+  }
+  if (c.ui.scatolaErrore) return `<span class="fonte stale">Scatto di La Scatola non leggibile</span>`;
+  if (IMPORT_ATTIVO) return li ? `Ultimo import ${fmtDate(li.at.slice(0, 10))}, ${li.at.slice(11, 16)}` : "Nessun import";
+  return "Dati dimostrativi — import sospeso";
+}
+
+/**
+ * L'avviso sopra i numeri quando lo scatto è vecchio o è stato preso mentre La Scatola non si
+ * aggiornava, più l'elenco di quello che La Scatola non dà. Il secondo elenco conta: le
+ * protezioni che si reggono su quei campi non possono scattare, e chi usa la piattaforma deve
+ * saperlo invece di scoprirlo quando sposta la persona sbagliata.
+ */
+export function scatolaNotice(c: Ctx): string {
+  if (c.ui.scatolaErrore) {
+    return `<div class="warns"><p class="wd">Scatto di La Scatola non usato</p><ul>
+      <li>${esc(c.ui.scatolaErrore)}</li>
+      <li>Finché non viene pubblicato uno scatto valido la piattaforma lavora sui dati che ha già.</li>
+    </ul></div>`;
+  }
+  const s = c.ui.scatola;
+  if (!s) return "";
+  const avv = avvisoScatola(s);
+  const mancanti: Record<string, string> = {
+    canale: "il canale di ogni prenotazione — quindi niente commissioni, niente valore netto e niente Expedia Collect",
+    pianoTariffario: "il piano tariffario — quindi le non rimborsabili non vengono riconosciute",
+    tag: "i tag scritti in Slope — quindi il blocco NO OVERBOOKING non arriva",
+    storicoCancellazioni: "lo storico delle cancellazioni — quindi la soglia vendibile non si può calcolare",
+  };
+  const elenco = s.mancanti.filter((m) => mancanti[m]).map((m) => `<li>${mancanti[m]}</li>`).join("");
+  if (!avv && !elenco) return "";
+  return `<div class="warns">
+    <p class="wd">${avv ? "Attenzione ai numeri" : "Da dove vengono questi numeri"}</p>
+    <ul>${avv ? `<li>${esc(avv)}</li>` : ""}
+      <li>Dallo scatto arrivano capienza, chiusure e occupazione per notte, camere assegnate,
+      persone, opzioni, ordini, saldi e date di prenotazione.</li></ul>
+    ${elenco ? `<details><summary>Cosa La Scatola non dà, e cosa ne consegue</summary><ul>${elenco}</ul>
+      <p class="muted"><small>Finché mancano, la piattaforma lavora sulla parte operativa —
+      conflitti, spostamenti, lista d'attesa, corrispondenza — e non sulla previsione.</small></p>
+    </details>` : ""}
+  </div>`;
+}
+
 export function header(c: Ctx): string {
   const li = c.app.meta.lastImport;
   return `<header class="top">
@@ -93,7 +153,7 @@ export function header(c: Ctx): string {
         const u = utenteCorrente();
         return u?.email ? `<span class="sep"></span><span class="who">${esc(u.email)}</span><button class="linkbtn" data-act="logout">Esci</button>` : "";
       })()}
-      <span class="sep"></span>${IMPORT_ATTIVO ? (li ? `Ultimo import ${fmtDate(li.at.slice(0, 10))}, ${li.at.slice(11, 16)}` : "Nessun import") : "Dati dimostrativi — import sospeso"}
+      <span class="sep"></span>${fonteDati(c, li)}
     </div>
     <nav class="tabs" role="tablist">${TABS.map(([k, l]) => `<button role="tab" aria-selected="${c.ui.tab === k}" data-act="tab" data-v="${k}">${l}</button>`).join("")}</nav>
   </header>`;
@@ -176,6 +236,7 @@ export function viewGuide(c: Ctx): string {
 
   return `<section class="page">
     <div class="pagehead">${hotelSwitch(c, true)}<p class="muted">Prossimi ${fc.length} giorni${c.ui.hotel === "gruppo" ? " — somma delle tre case, senza compensazione tra case" : ""}</p></div>
+    ${scatolaNotice(c)}
     ${fixedRoomsNotice(c)}
     ${specBanner(c)}
     <h2 class="lead">${esc(name)}: ${esc(lead)}</h2>
@@ -239,6 +300,7 @@ export function viewSolve(c: Ctx): string {
   return `<section class="page">
     <h2 class="lead">${conflicts ? `${conflicts} camere-notte in conflitto dal ${fmtDate(r.from, true)}. Prenotazioni: ${up.length} sistemate in casa, ${rip.length} riprotette nelle altre case, ${walk.length} in overbooking da ricollocare fuori.` : `Nessun conflitto di camere dal ${fmtDate(r.from, true)} per ${r.days.length} notti.`}</h2>
     ${controls}
+    ${scatolaNotice(c)}
     ${fixedRoomsNotice(c)}
     ${warnBlock(r.warnings, c.d.list.length > 0 && c.d.list.every((x) => x.id.startsWith("DEMO-")))}
     <div class="kpis">${s.hotels
