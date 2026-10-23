@@ -69,6 +69,23 @@ for r in s["capienza"]:
     assert fis == atteso or atteso == 0, ("camere fisiche discordanti", r, atteso)
 
 # --- 2. niente dati personali in chiaro
+
+def testi(v):
+    """Tutte le stringhe dentro un valore di La Scatola.
+
+    I campi del catalogo sono dichiarati stringa, ma `identity_document` arriva come
+    oggetto: senza appiattirlo il controllo andava in errore e non girava affatto.
+    """
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, dict):
+        return [x for y in v.values() for x in testi(y)]
+    if isinstance(v, (list, tuple)):
+        return [x for y in v for x in testi(y)]
+    if v is None or isinstance(v, bool):
+        return []
+    return [str(v)]
+
 parole = set()
 righe = []
 for f in [x for x in ospiti_p.split(",") if x]:
@@ -83,9 +100,10 @@ for r in righe:
     for k in ("primary_email", "primary_phone_number", "identity_document", "vat_number",
               "company_email", "company_phone", "email", "phone", "mobile_phone",
               "document_number", "order_customer_email"):
-        v = (r.get(k) or "").strip().lower()
-        if len(v) >= 6:
-            parole.add(v)
+        for v in testi(r.get(k)):
+            v = v.strip().lower()
+            if len(v) >= 6:
+                parole.add(v)
 basso = testo.lower()
 trovate = sorted(w for w in parole
                  if re.search(r"(?<![a-zà-ÿ0-9+/@.])" + re.escape(w) + r"(?![a-zà-ÿ0-9+/=])", basso))
