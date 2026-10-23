@@ -8,7 +8,7 @@ import { forecastGroup, forecastHotel } from "./forecast";
 import { solve } from "./solver";
 import { detectSpeculative } from "./speculative";
 import { detectCancellable } from "./cancellable";
-import { caricaScatola, prenotazioniDaScatola } from "./scatola";
+import { apriNomi, caricaScatola, prenotazioniDaScatola } from "./scatola";
 import { demoReservations } from "./demo";
 import { buildScenario } from "./scenario";
 import { buildSampleRows, buildLegendRows } from "./sample";
@@ -61,11 +61,15 @@ let loginKo = "";          // Firebase configurato ma irraggiungibile
 let soloLocale = false;    // l'utente ha scelto di continuare senza accesso
 let derived: Derived | null = null;
 
+/** Dove resta la password dei nomi: su questo computer, non nell'archivio condiviso. */
+const PW_NOMI = "overbooking.nomi";
+
 const ui: UIState = {
   tab: "guida",
   roomsFixed: 0,
   scatola: null,
   scatolaErrore: null,
+  nomiAperti: 0,
   hotel: "saslong",
   solveFrom: todayISO(),
   solveDays: 14,
@@ -282,13 +286,35 @@ async function caricaDaScatola(): Promise<void> {
   ui.scatola = snapshot;
   ui.scatolaErrore = errore;
   if (!snapshot) return;
-  const list = prenotazioniDaScatola(snapshot);
+  // La password resta su questo computer: si digita una volta, non a ogni apertura.
+  let nomi: Map<string, string> | undefined;
+  let salvata: string | null = null;
+  try { salvata = localStorage.getItem(PW_NOMI); } catch { /* archivio non disponibile */ }
+  if (salvata && snapshot.ospitiEnc) {
+    try { nomi = await apriNomi(snapshot.ospitiEnc, salvata, snapshot.generato); }
+    catch { try { localStorage.removeItem(PW_NOMI); } catch { /* niente */ } }
+  }
+  ui.nomiAperti = nomi?.size ?? 0;
+  const list = prenotazioniDaScatola(snapshot, nomi);
   if (!list.length) {
     ui.scatolaErrore = "Lo scatto di La Scatola non contiene prenotazioni: non lo uso.";
     ui.scatola = null;
     return;
   }
   app.reservations = new Map(list.map((r) => [resKey(r), r]));
+}
+
+/** Prova una password sullo scatto in corso. Vero se ha aperto davvero dei nomi. */
+async function apriNomiScatola(pw: string): Promise<boolean> {
+  const s = ui.scatola;
+  if (!s?.ospitiEnc) return false;
+  let nomi: Map<string, string>;
+  try { nomi = await apriNomi(s.ospitiEnc, pw, s.generato); } catch { return false; }
+  if (!nomi.size) return false;
+  ui.nomiAperti = nomi.size;
+  app.reservations = new Map(prenotazioniDaScatola(s, nomi).map((r) => [resKey(r), r]));
+  invalidate();
+  return true;
 }
 
 // ------------------------------------------------------------ azioni
@@ -570,6 +596,27 @@ root.addEventListener("click", async (ev) => {
     case "logout":
       await esci();
       location.reload();
+      return;
+    case "nomi": {
+      const pw = prompt("Password della reception per vedere i nomi degli intestatari:");
+      if (pw == null || !pw.trim()) return;
+      const ok = await apriNomiScatola(pw.trim());
+      if (ok) {
+        try { localStorage.setItem(PW_NOMI, pw.trim()); } catch { /* resta per questa sessione */ }
+        toast(`Nomi aperti: ${ui.nomiAperti} intestatari.`);
+        render();
+      } else {
+        toast("La password non apre i nomi di questo scatto. Controlla con la direzione.", "err");
+      }
+      return;
+    }
+    case "nomi-chiudi":
+      try { localStorage.removeItem(PW_NOMI); } catch { /* niente */ }
+      ui.nomiAperti = 0;
+      await caricaDaScatola();
+      invalidate();
+      render();
+      toast("Nomi nascosti su questo computer.");
       return;
     case "scroll": {
       const el = document.getElementById(v);

@@ -45,6 +45,8 @@ export interface UIState {
   scatola: ScatolaSnapshot | null;
   /** Perché lo scatto non è stato usato, da mostrare così com'è. */
   scatolaErrore: string | null;
+  /** Quanti nomi di intestatario sono stati aperti con la password della reception. */
+  nomiAperti: number;
   hotel: HotelId | "gruppo";
   solveFrom: string;
   solveDays: number;
@@ -93,6 +95,25 @@ const TABS: [Tab, string][] = TABS_ALL.filter(([k]) => IMPORT_ATTIVO || k !== "i
  */
 export function idSlope(id: string): string {
   return `<code class="id" title="${esc(id)}">${esc(id.slice(0, 8))}</code>`;
+}
+
+/**
+ * Il comando per vedere i nomi degli intestatari.
+ *
+ * I nomi viaggiano cifrati perché il repository è pubblico; la password della reception li
+ * apre e resta su questo computer, così si digita una volta. Finché non è stata digitata, al
+ * posto del nome c'è il numero di camera: la piattaforma lavora lo stesso, ma chi deve
+ * scrivere a un ospite ha bisogno di sapere chi è.
+ */
+function comandoNomi(c: Ctx): string {
+  const s = c.ui.scatola;
+  if (!s?.ospitiEnc) return "";
+  if (c.ui.nomiAperti > 0) {
+    return `<span class="sep"></span><span class="who">Nomi visibili</span>` +
+      `<button class="linkbtn" data-act="nomi-chiudi" title="Nasconde i nomi su questo computer">Nascondi</button>`;
+  }
+  return `<span class="sep"></span><button class="linkbtn" data-act="nomi" ` +
+    `title="I nomi sono cifrati: serve la password della reception">Mostra i nomi</button>`;
 }
 
 /** Un dato che La Scatola non dà. Scriverlo «0 €» lo farebbe sembrare un valore misurato. */
@@ -168,7 +189,7 @@ export function header(c: Ctx): string {
         const u = utenteCorrente();
         return u?.email ? `<span class="sep"></span><span class="who">${esc(u.email)}</span><button class="linkbtn" data-act="logout">Esci</button>` : "";
       })()}
-      <span class="sep"></span>${fonteDati(c, li)}
+      <span class="sep"></span>${fonteDati(c, li)}${comandoNomi(c)}
     </div>
     <nav class="tabs" role="tablist">${TABS.map(([k, l]) => `<button role="tab" aria-selected="${c.ui.tab === k}" data-act="tab" data-v="${k}">${l}</button>`).join("")}</nav>
   </header>`;
@@ -718,8 +739,9 @@ export function specSection(c: Ctx): string {
         Scatola è senza dati personali: al posto del nome c'è il numero di camera.</li>
         <li>Confrontare i segnaposto darebbe segnalazioni false dall'aria credibile — ogni
         gruppo sembrerebbe un furbetto — quindi il controllo resta spento invece di indovinare.</li>
-        <li>Si riaccende da solo quando i nomi vengono pubblicati cifrati e aperti con la
-        password della reception.</li>
+        <li>${c.ui.scatola?.ospitiEnc
+          ? `I nomi ci sono, cifrati: apri «Mostra i nomi» in alto con la password della reception e il controllo riparte da solo.`
+          : `Si riaccende da solo quando lo scatto porterà i nomi degli intestatari.`}</li>
       </ul></div>${coda}`;
   }
   if (!flags.length) return `<h3 class="sec with-info" id="doppie">Doppie prenotazioni ${infoButton("spec", "Come funziona il controllo")}</h3><p class="muted narrow">Nessuna segnalazione aperta. Il controllo confronta ID cliente e nominativo su tutte e tre le case a ogni import.</p>${coda}`;

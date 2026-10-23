@@ -17,7 +17,7 @@
  *
  * Gli ID di Slope non vengono mai modificati: `id` e `scatolaTypeId` sono copiati identici.
  */
-import type { HotelId, Reservation, RoomType } from "./types";
+import type { HotelId, Reservation, ResStatus, RoomType } from "./types";
 
 // ------------------------------------------------------------ forma del file
 
@@ -70,9 +70,20 @@ export interface PrenotazioneScatola {
   isOverbooking: boolean;
   orderId: string | null;
   createdAt: string | null;
-  orderTotal: number | null;
+  /** Importo della singola prenotazione: `room_amount`, non il totale dell'ordine. */
+  total: number | null;
   openBalance: number | null;
   checkedIn: boolean;
+  stato: ResStatus;
+  cancelledAt: string | null;
+  canale: string;
+  agenzia: string;
+  /** Lingua dell'intestatario: serve a scegliere la lingua dell'email senza aprire i nomi. */
+  lingua: string;
+  /** L'intestatario è un'azienda: di solito vuol dire gruppo. */
+  azienda: boolean;
+  /** C'è un nome nel blocco cifrato, anche se non è stato aperto. */
+  haNome: boolean;
 }
 
 export interface ScatolaSnapshot {
@@ -104,6 +115,11 @@ function str(v: unknown): string | null {
 
 function num(v: unknown, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+/** Uno stato che non riconosco non diventa «confermata» di nascosto: resta opzione. */
+function statoOk(v: unknown): ResStatus {
+  return v === "cancellata" || v === "noshow" || v === "opzione" || v === "confermata" ? v : "opzione";
 }
 
 /**
@@ -163,9 +179,16 @@ function valida(j: unknown): EsitoScatola {
       isOverbooking: p.isOverbooking === true,
       orderId: str(p.orderId),
       createdAt: str(p.createdAt),
-      orderTotal: typeof p.orderTotal === "number" ? p.orderTotal : null,
+      total: typeof p.total === "number" ? p.total : null,
       openBalance: typeof p.openBalance === "number" ? p.openBalance : null,
       checkedIn: p.checkedIn === true,
+      stato: statoOk(p.stato),
+      cancelledAt: str(p.cancelledAt),
+      canale: str(p.canale) ?? "",
+      agenzia: str(p.agenzia) ?? "",
+      lingua: str(p.lingua) ?? "",
+      azienda: p.azienda === true,
+      haNome: p.haNome === true,
     });
   }
 
@@ -249,13 +272,13 @@ export function tipologieDaScatola(s: ScatolaSnapshot, hotelId: HotelId): RoomTy
 /**
  * Le prenotazioni dello scatto nella forma della piattaforma.
  *
- * I campi che La Scatola non espone restano vuoti, non inventati: canale, piano tariffario,
- * tag, stato del pagamento in parole. Le protezioni che si reggono su quei campi — non
- * rimborsabile, tag NO OVERBOOKING, Expedia Collect — non possono scattare, e la piattaforma
- * lo dice in chiaro invece di far credere che siano attive.
+ * Canale, importo, data di prenotazione e stato vengono da `curated_reservations` e sono
+ * quelli veri. `total` è `room_amount`, cioè l'importo della singola prenotazione: non va
+ * ripartito fra le camere di un ordine, è già suo.
  *
- * `total` viene riempito solo quando l'ordine ha una camera sola: su un ordine con più camere
- * `order_total` è il totale dell'ordine e ripartirlo sarebbe un'invenzione.
+ * Restano vuoti, e quindi elencati in `mancanti`, il piano tariffario e i tag di Slope: le
+ * protezioni che si reggono su quei campi — non rimborsabile, tag NO OVERBOOKING — non
+ * possono scattare, e la piattaforma lo dice invece di far credere che siano attive.
  */
 export function prenotazioniDaScatola(s: ScatolaSnapshot, nomi?: Map<string, string>): Reservation[] {
   const perOrdine = new Map<string, number>();
@@ -263,7 +286,7 @@ export function prenotazioniDaScatola(s: ScatolaSnapshot, nomi?: Map<string, str
     if (p.orderId) perOrdine.set(p.orderId, (perOrdine.get(p.orderId) ?? 0) + 1);
   }
   return s.prenotazioni.map((p) => {
-    const sole = p.orderId ? (perOrdine.get(p.orderId) ?? 1) === 1 : true;
+    const camereOrdine = p.orderId ? (perOrdine.get(p.orderId) ?? 1) : 1;
     const nome = nomi?.get(p.id) ?? null;
     const r: Reservation = {
       id: p.id,
@@ -271,16 +294,16 @@ export function prenotazioniDaScatola(s: ScatolaSnapshot, nomi?: Map<string, str
       createdAt: p.createdAt,
       arrival: p.arrival,
       departure: p.departure,
-      status: p.isOption ? "opzione" : "confermata",
-      cancelledAt: null,
-      channel: "",
-      channelRaw: "",
+      status: p.stato,
+      cancelledAt: p.cancelledAt,
+      channel: p.canale.toLowerCase(),
+      channelRaw: p.agenzia || p.canale,
       roomType: codiceTipologia(p.scatolaTypeId),
       room: p.room,
       rooms: 1,
       adults: p.adults,
       children: p.children,
-      total: sole && p.orderTotal != null ? p.orderTotal : 0,
+      total: p.total ?? 0,
       guest: nome ?? (p.room ? `Camera ${p.room}` : `Pren. ${p.id.slice(0, 8)}`),
       // L'ordine non è il cliente: un ordine raggruppa le camere prenotate insieme, e lo stesso
       // cliente può averne molti. Metterlo in `customerId` faceva sembrare ogni gruppo un ospite

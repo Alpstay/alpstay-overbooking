@@ -75,11 +75,14 @@ for f in [x for x in ospiti_p.split(",") if x]:
     j = json.load(open(f, encoding="utf-8"))
     righe += j.get("data") or j.get("rows") or []
 for r in righe:
-    for k in ("last_name", "first_name", "order_customer_last_name", "order_customer_first_name"):
+    for k in ("last_name", "first_name", "organization_name",
+              "order_customer_last_name", "order_customer_first_name"):
         for w in re.split(r"[\s,]+", r.get(k) or ""):
             if len(w) >= 5:
                 parole.add(w.lower())
-    for k in ("email", "phone", "mobile_phone", "document_number", "order_customer_email"):
+    for k in ("primary_email", "primary_phone_number", "identity_document", "vat_number",
+              "company_email", "company_phone", "email", "phone", "mobile_phone",
+              "document_number", "order_customer_email"):
         v = (r.get(k) or "").strip().lower()
         if len(v) >= 6:
             parole.add(v)

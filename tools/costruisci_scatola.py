@@ -6,20 +6,29 @@ Ogni file è il risultato così com'è, `{"data":[...], "freshness":..., "page":
 
   python3 tools/costruisci_scatola.py \
       --disponibilita disp1.json,disp2.json \
-      --soggiorni sog1.json,sog2.json \
-      [--saldi saldi.json] [--inhouse inhouse.json] \
-      [--ospiti osp1.json,osp2.json --password "PASSWORD RECEPTION"] \
+      --prenotazioni pren1.json,pren2.json \
+      [--saldi saldi.json] \
+      [--contatti c1.json,c2.json --password "PASSWORD RECEPTION"] \
       [--etichette etichette.json] \
-      --da 2026-10-24 --a 2027-04-30 > scatola.json
+      --da 2026-10-24 --a 2027-05-02 > scatola.json
+
+Viste usate, e perché queste:
+- `curated_availability_daily` → capienza, chiusure e occupazione per notte. Già calcolate.
+- `curated_reservations` → le prenotazioni complete, cancellate comprese, **con canale,
+  importo e data di prenotazione**. Sostituisce `curated_operational_stays`, che è un
+  sottoinsieme senza canale né importo.
+- `curated_order_balances` → saldo aperto per ordine, per riconoscere la caparra non pagata.
+- `curated_reservation_contacts` → nome dell'intestatario della prenotazione. È questa la
+  vista giusta per il nome: `curated_guest_stays` contiene solo gli ospiti già registrati,
+  cioè quelli che hanno fatto il check-in, e sulle prenotazioni future è quasi sempre vuota.
 
 Regole che questo script non viola:
 - Gli ID di Slope si copiano identici: non vengono riscritti, accorciati o rinumerati.
-- Nomi, email e telefoni degli ospiti non finiscono mai in chiaro nell'uscita. I nomi, in
-  forma breve, finiscono nel blocco cifrato; email e telefoni **non vengono pubblicati
-  affatto**: su un repository pubblico una rubrica cifrata con una password di reception è
-  un rischio che non vale la comodità. L'indirizzo si prende da Slope al momento di scrivere.
-- Quello che La Scatola non dà resta vuoto e viene elencato in `mancanti`. Nessun valore
-  verosimile inventato per far sembrare completo lo scatto.
+- Nomi, email e telefoni non finiscono mai in chiaro nell'uscita. Il nome, in forma breve,
+  finisce nel blocco cifrato; **email e telefoni non vengono pubblicati affatto**: su un
+  repository pubblico una rubrica cifrata con una password di reception è un rischio che non
+  vale la comodità. L'indirizzo si prende da Slope al momento di scrivere.
+- Quello che La Scatola non dà resta vuoto e viene elencato in `mancanti`.
 
 Esce con errore se lo scatto sarebbe inutilizzabile. In quel caso **non si pubblica**: la
 pagina online ha ancora lo scatto di ieri, che è meglio di uno sbagliato.
@@ -42,14 +51,14 @@ CASE = {
     "33333333-3333-4333-8333-333333333333": ("saslong", "Smart Hotel Saslong"),
 }
 
-# Quello che La Scatola non espone, verificato il 23 ottobre 2026. Va in `mancanti`: la pagina
-# lo mostra, così nessuno crede che le protezioni che si reggono su questi campi siano attive.
+# Quello che La Scatola non espone, verificato il 23 ottobre 2026.
 MANCANTI = [
-    "canale",                 # report_channel_mix è aggregato per struttura, non per prenotazione
-    "pianoTariffario",        # quindi non si riconoscono le non rimborsabili
-    "tag",                    # quindi il tag NO OVERBOOKING della reception non arriva
-    "storicoCancellazioni",   # report_cancellations parte dal 23/09/2026: troppo poco per una curva
+    "pianoTariffario",        # `reservation_rate_plan` esiste: da collegare, poi si toglie
+    "tag",                    # il tag NO OVERBOOKING della reception non arriva
+    "storicoCancellazioni",   # le cancellate ci sono ma sono l'1,9%: troppo poche per una curva
 ]
+
+SUPPORTED = {"it", "de", "en", "fr", "es", "nl", "pt", "pl", "cs", "ru", "zh", "ko", "ar", "he"}
 
 
 def carica(percorsi):
@@ -80,12 +89,19 @@ def freschezza(percorsi):
     return {"stato": "sconosciuta", "ultimoSuccesso": None, "etaOre": None}
 
 
-def breve(cognome, nome):
-    """"Cognome N.": alla reception basta per riconoscere l'ospite."""
-    def tit(s):
-        return " ".join(w.capitalize() if (w.isupper() or w.islower()) else w for w in (s or "").split())
-    c, n = tit(cognome), tit(nome)
-    return (c + (" " + n[0] + "." if n else "")).strip()
+def tit(s):
+    return " ".join(w.capitalize() if (w.isupper() or w.islower()) else w for w in (s or "").split())
+
+
+def nome_breve(c):
+    """"Cognome N." per le persone, ragione sociale per le aziende: alla reception basta."""
+    if not c:
+        return None
+    az = tit(c.get("organization_name"))
+    if az:
+        return az[:40]
+    cogn, nom = tit(c.get("last_name")), tit(c.get("first_name"))
+    return (cogn + (" " + nom[0] + "." if nom else "")).strip() or None
 
 
 def cifra(nomi, password, aad):
@@ -95,13 +111,23 @@ def cifra(nomi, password, aad):
     return {"alg": "AES-GCM/PBKDF2-SHA256", "iter": ITER, "salt": b64(salt), "iv": b64(iv), "ct": b64(ct)}
 
 
+def stato_di(r):
+    if r.get("is_canceled"):
+        return "cancellata"
+    bs = (r.get("booking_status") or "").upper()
+    if "NO_SHOW" in bs or "NOSHOW" in bs:
+        return "noshow"
+    if r.get("is_option"):
+        return "opzione"
+    return "confermata"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--disponibilita", required=True, help="file di curated_availability_daily")
-    ap.add_argument("--soggiorni", required=True, help="file di curated_operational_stays")
+    ap.add_argument("--prenotazioni", required=True, help="file di curated_reservations")
     ap.add_argument("--saldi", default="", help="file di curated_order_balances")
-    ap.add_argument("--inhouse", default="", help="file di list_in_house: segna chi è già in casa")
-    ap.add_argument("--ospiti", default="", help="file di curated_guest_stays (dati personali)")
+    ap.add_argument("--contatti", default="", help="file di curated_reservation_contacts (dati personali)")
     ap.add_argument("--password", default="", help="password della reception per cifrare i nomi")
     ap.add_argument("--etichette", default="", help='JSON {"<lodging_type_id>": "Doppia", ...}')
     ap.add_argument("--case", default="", help='JSON {"<property_id>": ["hotelId", "Nome"], ...}')
@@ -119,11 +145,11 @@ def main():
     etichette = json.load(open(a.etichette, encoding="utf-8")) if a.etichette else {}
 
     disp = carica(a.disponibilita)
-    sogg = carica(a.soggiorni)
+    pren_righe = carica(a.prenotazioni)
     assert disp, "nessuna riga di disponibilità: non pubblicare"
-    assert sogg, "nessun soggiorno: non pubblicare"
+    assert pren_righe, "nessuna prenotazione: non pubblicare"
 
-    sconosciute = {r["property_id"] for r in disp + sogg if r.get("property_id") not in case}
+    sconosciute = {r["property_id"] for r in disp + pren_righe if r.get("property_id") not in case}
     assert not sconosciute, ("strutture non mappate su una casa della piattaforma: %s" % sorted(sconosciute))
 
     # --- capienza per notte, tenuta solo nel periodo richiesto
@@ -143,17 +169,18 @@ def main():
     # --- saldi per ordine
     saldi = {}
     for r in carica(a.saldi):
-        saldi[r["order_id"]] = {
-            "createdAt": r.get("creation_date"),
-            "orderTotal": r.get("order_total"),
-            "openBalance": r.get("open_balance"),
-        }
+        saldi[r["order_id"]] = r.get("open_balance")
 
-    in_casa = {r["reservation_id"] for r in carica(a.inhouse) if r.get("reservation_id")}
+    # --- contatti: solo il nome, e solo per le prenotazioni dello scatto
+    contatti = {}
+    for r in carica(a.contatti):
+        rid = r.get("reservation_id")
+        if rid and rid not in contatti:
+            contatti[rid] = r
 
     # --- prenotazioni
     pren, visti = [], set()
-    for r in sogg:
+    for r in pren_righe:
         rid = r["reservation_id"]
         assert UUID.fullmatch(rid), ("reservation_id non valido", rid)
         if rid in visti:
@@ -163,12 +190,14 @@ def main():
         assert GIORNO.match(arr) and GIORNO.match(dep) and arr < dep, ("date non valide", rid, arr, dep)
         if dep <= a.da or arr >= a.a:
             continue   # fuori dal periodo coperto dallo scatto
-        o = saldi.get(r.get("order_id")) or {}
         tipo = r.get("lodging_type_id") or ""
         if tipo:
             k = (r["property_id"], tipo)
             if k not in camere:
-                camere[k] = 0   # tipologia vista solo nei soggiorni: camere fisiche ignote
+                camere[k] = 0   # tipologia vista solo nelle prenotazioni: camere fisiche ignote
+        c = contatti.get(rid) or {}
+        lingua = (c.get("language") or "").lower()
+        notti = r.get("room_nights") or 0
         pren.append({
             "id": rid,
             "hotelId": case[r["property_id"]][0],
@@ -181,10 +210,20 @@ def main():
             "isOption": bool(r.get("is_option")),
             "isOverbooking": bool(r.get("is_overbooking")),
             "orderId": r.get("order_id"),
-            "createdAt": o.get("createdAt"),
-            "orderTotal": o.get("orderTotal"),
-            "openBalance": o.get("openBalance"),
-            "checkedIn": rid in in_casa,
+            "createdAt": (r.get("creation_date") or None),
+            # room_amount è l'importo della singola prenotazione: non va ripartito, è già suo.
+            "total": r.get("room_amount"),
+            "notti": int(notti) if notti else None,
+            "openBalance": saldi.get(r.get("order_id")),
+            "checkedIn": bool(r.get("check_in_at")) and not r.get("check_out_at"),
+            "stato": stato_di(r),
+            "cancelledAt": (r.get("cancellation_date") or None),
+            "canale": (r.get("channel") or r.get("ota_channel") or r.get("sale_source") or ""),
+            "agenzia": r.get("agency_name") or "",
+            "lingua": lingua if lingua in SUPPORTED else "",
+            # l'azienda intestataria conta per i gruppi: si pubblica solo il fatto che ci sia
+            "azienda": bool(c.get("organization_name")),
+            "haNome": bool(nome_breve(c)),
         })
     assert pren, "nessuna prenotazione nel periodo richiesto: non pubblicare"
     pren.sort(key=lambda p: (p["arrival"], p["hotelId"], p["id"]))
@@ -201,26 +240,15 @@ def main():
     if senza_camere:
         print("ATTENZIONE: tipologie senza camere fisiche note: %s" % senza_camere, file=sys.stderr)
 
-    # --- nomi cifrati: solo forma breve, solo delle prenotazioni dello scatto
+    # --- nomi cifrati
     ospiti_enc, n_nomi = None, 0
-    righe_ospiti = carica(a.ospiti)
-    if righe_ospiti:
-        assert a.password, "--ospiti richiede --password: i nomi non si pubblicano in chiaro"
-        per_res = collections.defaultdict(list)
-        for r in righe_ospiti:
-            if r.get("reservation_id") in visti:
-                per_res[r["reservation_id"]].append(r)
+    if contatti:
+        assert a.password, "--contatti richiede --password: i nomi non si pubblicano in chiaro"
         nomi = {}
-        for rid, gs in per_res.items():
-            g = next((x for x in gs if x.get("is_primary_guest")), gs[0])
-            n = breve(g.get("last_name"), g.get("first_name")) or \
-                breve(g.get("order_customer_last_name"), g.get("order_customer_first_name"))
+        for rid in visti:
+            n = nome_breve(contatti.get(rid))
             if n:
                 nomi[rid] = n
-        orfani = {r["reservation_id"] for r in righe_ospiti} - visti
-        if orfani:
-            print("nota: %d prenotazioni con ospiti fuori dallo scatto (normale: periodo diverso)"
-                  % len(orfani), file=sys.stderr)
         if nomi:
             ospiti_enc, n_nomi = cifra(nomi, a.password, generato), len(nomi)
 
@@ -228,7 +256,7 @@ def main():
         "fonte": "La Scatola",
         "generato": generato,
         "finestra": {"da": a.da, "a": a.a},
-        "freschezza": freschezza(a.disponibilita + "," + a.soggiorni),
+        "freschezza": freschezza(a.disponibilita + "," + a.prenotazioni),
         "mancanti": MANCANTI,
         "case": elenco_case,
         "capienza": capienza,
@@ -238,16 +266,22 @@ def main():
     json.dump(out, sys.stdout, ensure_ascii=False, separators=(",", ":"))
 
     per_casa = collections.Counter(p["hotelId"] for p in pren)
-    opzioni = sum(1 for p in pren if p["isOption"])
-    senza_camera = sum(1 for p in pren if not p["room"])
+    stati = collections.Counter(p["stato"] for p in pren)
+    canali = collections.Counter(p["canale"] or "(vuoto)" for p in pren)
     fr = out["freschezza"]
     print("scatto %s — %s → %s" % (generato, a.da, a.a), file=sys.stderr)
-    print("prenotazioni %d (%s), di cui %d opzioni e %d senza camera assegnata"
-          % (len(pren), ", ".join("%s %d" % kv for kv in sorted(per_casa.items())), opzioni, senza_camera),
-          file=sys.stderr)
+    print("prenotazioni %d (%s)" % (len(pren), ", ".join("%s %d" % kv for kv in sorted(per_casa.items()))), file=sys.stderr)
+    print("stati: %s" % dict(stati), file=sys.stderr)
+    print("canali piu' frequenti: %s" % dict(canali.most_common(6)), file=sys.stderr)
+    print("con importo: %d · con data di prenotazione: %d · con camera: %d"
+          % (sum(1 for p in pren if p["total"]), sum(1 for p in pren if p["createdAt"]),
+             sum(1 for p in pren if p["room"])), file=sys.stderr)
     print("capienza: %d righe giorno×tipologia; tipologie %s"
           % (len(capienza), {c["hotelId"]: len(c["tipologie"]) for c in elenco_case}), file=sys.stderr)
     print("nomi cifrati: %d su %d prenotazioni" % (n_nomi, len(pren)), file=sys.stderr)
+    if n_nomi and n_nomi < len(pren) * 0.8:
+        print("ATTENZIONE: meno dell'80%% delle prenotazioni ha un nome. Controlla di aver "
+              "scaricato tutte le pagine di curated_reservation_contacts.", file=sys.stderr)
     print("freschezza La Scatola: %s, ultimo successo %s (%s ore)"
           % (fr["stato"], fr["ultimoSuccesso"], fr["etaOre"]), file=sys.stderr)
     if fr["stato"] != "ok":

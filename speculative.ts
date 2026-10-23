@@ -108,6 +108,10 @@ export function detectSpeculative(list: Reservation[], s: Settings): SpecResult 
     for (let i = 0; i < rs.length; i++) {
       for (let j = i + 1; j < rs.length; j++) {
         const a = rs[i], b = rs[j];
+        // Due camere dello stesso ordine sono una prenotazione sola, non due aperte insieme:
+        // una famiglia che prende due camere per periodi un po' diversi non sta speculando.
+        // Senza questo controllo ogni gruppo con camere sfalsate diventa una segnalazione.
+        if (a.groupRef && a.groupRef === b.groupRef) continue;
         if (overlaps(a, b)) {
           if (a.hotelId !== b.hotelId) { put(a, b, "case-diverse", "alta"); put(b, a, "case-diverse", "alta"); }
           else if (!sameDates(a, b)) { put(a, b, "sovrapposte", "media"); put(b, a, "sovrapposte", "media"); }
