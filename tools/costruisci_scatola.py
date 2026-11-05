@@ -84,7 +84,7 @@ def freschezza(percorsi):
             if ultimo:
                 t = datetime.datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
                 eta = round((datetime.datetime.now(datetime.timezone.utc) - t).total_seconds() / 3600, 1)
-            return {"stato": "ok" if stato == "ok" else ("failing" if stato else "sconosciuta"),
+            return {"stato": "ok" if stato in ("ok", "fresh") else ("failing" if stato else "sconosciuta"),
                     "ultimoSuccesso": ultimo, "etaOre": eta}
     return {"stato": "sconosciuta", "ultimoSuccesso": None, "etaOre": None}
 

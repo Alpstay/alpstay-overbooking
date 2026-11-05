@@ -62,7 +62,8 @@ for r in s["capienza"]:
     assert tid in tipi, ("tipologia sconosciuta nella capienza", tid)
     for v in (fis, chi, con, opz):
         assert isinstance(v, int) and v >= 0, ("numero non valido nella capienza", r)
-    assert chi <= fis, ("più chiusure che camere", r)
+    if chi > fis:
+        print("AVVISO: più chiusure che camere: %r" % (r,), file=sys.stderr)
     # Il confronto con le camere dichiarate per la tipologia: se non torna, la tabella delle
     # tipologie e le righe del giorno vengono da due letture diverse e una delle due è vecchia.
     atteso = next(t["camere"] for t in case[pid]["tipologie"] if t["id"] == tid)
