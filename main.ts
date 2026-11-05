@@ -9,8 +9,6 @@ import { solve } from "./solver";
 import { detectSpeculative } from "./speculative";
 import { detectCancellable } from "./cancellable";
 import { apriNomi, caricaScatola, prenotazioniDaScatola } from "./scatola";
-import { demoReservations } from "./demo";
-import { buildScenario } from "./scenario";
 import { buildSampleRows, buildLegendRows } from "./sample";
 import { bindTables, exportTable } from "./table";
 import { addDays, diffDays, todayISO, uid, esc } from "./util";
@@ -270,6 +268,7 @@ async function loadAll(): Promise<void> {
       } catch { /* la correzione vale comunque per questa sessione */ }
     }
   }
+  await pulisciDemo();
   await caricaDaScatola();
   invalidate();
 }
@@ -357,55 +356,34 @@ async function doImport(): Promise<void> {
   });
 }
 
-async function loadDemo(): Promise<void> {
-  await busy("Genero i dati dimostrativi…", async () => {
-    const list = demoReservations(app.settings);
-    for (const r of list) app.reservations.set(resKey(r), r);
-    await persistHotels(app.settings.hotels.map((h) => h.id));
-    await saveMeta({ at: new Date().toISOString(), hotelId: "multi", file: "dati dimostrativi", rows: list.length, inserted: list.length, updated: 0, skipped: 0, warnings: [] });
-    invalidate();
-    ui.tab = "guida";
-  });
-}
-
-async function loadScenario(): Promise<void> {
-  const ok = await busy("Preparo lo scenario di prova…", async () => {
-    const base = demoReservations(app.settings);
-    const sc = buildScenario(base, app.settings);
-    for (const r of [...base, ...sc.reservations]) app.reservations.set(resKey(r), r);
-    app.waitlist = [...app.waitlist.filter((w) => !w.id.startsWith("WSC")), ...sc.waitlist];
-    app.cases = [...app.cases.filter((k) => !k.resId.startsWith("DEMO-SC-OLD")), ...sc.cases];
-    await persistHotels(app.settings.hotels.map((h) => h.id));
-    setBusy("Salvo lista d'attesa e registro…");
-    await store.saveWaitlist(app.waitlist);
-    await saveCases();
-    await saveMeta({ at: new Date().toISOString(), hotelId: "multi", file: "scenario di prova", rows: base.length + sc.reservations.length,
-      inserted: base.length + sc.reservations.length, updated: 0, skipped: 0, warnings: [] });
-    invalidate();
-    return sc.attese;
-  });
-  if (ok) {
-    ui.tab = "guida";
-    ui.hotel = app.settings.hotels[0]?.id ?? "gruppo";
-    render();
-    toast("Scenario pronto: parti dalla Guida strategica, poi Problem solving.");
-  }
-}
-
-async function clearDemo(): Promise<void> {
-  await busy("Elimino i dati dimostrativi…", async () => {
-    const touched = new Set<HotelId>();
-    for (const [k, r] of app.reservations) if (r.id.startsWith("DEMO-")) { app.reservations.delete(k); touched.add(r.hotelId); }
-    await persistHotels(touched);
-    app.waitlist = app.waitlist.filter((w) => !w.id.startsWith("WSC") && !(w.slopeId ?? "").startsWith("DEMO-"));
-    app.cases = app.cases.filter((k) => !k.resId.startsWith("DEMO-"));
-    app.mails = app.mails.filter((m) => !m.resId.startsWith("DEMO-"));
+/**
+ * Toglie dall'archivio condiviso tutto quello che veniva dai dati dimostrativi: prenotazioni
+ * DEMO-, lista d'attesa e registro dello scenario di prova, corrispondenza collegata.
+ * Gira da sola all'avvio, una volta, solo se trova qualcosa da togliere e si può scrivere.
+ * I dati veri (ID di Slope) non si toccano: si filtra solo sul prefisso DEMO- e sugli ID WSC
+ * creati dallo scenario.
+ */
+async function pulisciDemo(): Promise<void> {
+  const demoRes = [...app.reservations.entries()].filter(([, r]) => r.id.startsWith("DEMO-"));
+  const isDemoW = (w: { id: string; slopeId?: string | null }) => w.id.startsWith("WSC") || (w.slopeId ?? "").startsWith("DEMO-");
+  const trovati = demoRes.length + app.waitlist.filter(isDemoW).length
+    + app.cases.filter((k) => k.resId.startsWith("DEMO-")).length + app.mails.filter((m) => m.resId.startsWith("DEMO-")).length;
+  if (!trovati || !app.canWrite) return;
+  const touched = new Set<HotelId>();
+  for (const [k, r] of demoRes) { app.reservations.delete(k); touched.add(r.hotelId); }
+  app.waitlist = app.waitlist.filter((w) => !isDemoW(w));
+  app.cases = app.cases.filter((k) => !k.resId.startsWith("DEMO-"));
+  app.mails = app.mails.filter((m) => !m.resId.startsWith("DEMO-"));
+  try {
+    if (touched.size) await persistHotels(touched);
     await store.saveWaitlist(app.waitlist);
     await store.saveMails(app.mails);
     await saveCases();
+    const demoLog = (l: ImportLog | null) => !!l && /dimostrativ|scenario di prova/.test(l.file ?? "");
+    if (demoLog(app.meta.lastImport)) app.meta.lastImport = null;
+    app.meta.history = app.meta.history.filter((l) => !demoLog(l));
     await saveMeta(null);
-    invalidate();
-  });
+  } catch { /* si riprova alla prossima apertura */ }
 }
 
 function setPath(obj: unknown, path: string, value: unknown): void {
@@ -728,8 +706,6 @@ root.addEventListener("click", async (ev) => {
     }
     case "do-import": await doImport(); return;
     case "imp-reset": ui.imp.sheet = null; render(); return;
-    case "demo-load": await loadDemo(); return;
-    case "demo-scenario": await loadScenario(); return;
     case "sample-xlsx": {
       await busy("Preparo il file di esempio…", async () => {
         const wb = XLSX.utils.book_new();
@@ -744,7 +720,6 @@ root.addEventListener("click", async (ev) => {
       });
       return;
     }
-    case "demo-clear": await clearDemo(); return;
     case "settings-save": {
       if (!dr) return;
       const err = validateSettings(dr);

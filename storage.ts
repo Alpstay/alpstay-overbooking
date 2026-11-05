@@ -36,7 +36,7 @@ function describeDbError(e: { code?: string; message?: string } | null): string 
     case "deadline-exceeded": return "Il salvataggio ha impiegato troppo: controlla la connessione e riprova.";
     case "resource-exhausted":
     case "resource_exhausted": return "Il salvataggio è stato rifiutato per troppe scritture ravvicinate. Riprova fra un minuto: i dati già salvati restano.";
-    case "quota_exceeded": return "Lo spazio dati della piattaforma è pieno. Elimina i dati dimostrativi o lo storico più vecchio, poi riprova.";
+    case "quota_exceeded": return "Lo spazio dati della piattaforma è pieno. Elimina lo storico più vecchio, poi riprova.";
     case "invalid_argument": return "Un blocco di dati è troppo grande o non valido e non è stato salvato. Segnalalo: va ridotta la dimensione dei blocchi.";
     case "revoked": return "Il permesso di scrittura è stato tolto mentre salvavo. Ricarica la pagina.";
     case "not_granted":

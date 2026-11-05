@@ -68,7 +68,7 @@ export interface UIState {
 export interface Ctx { app: AppState; d: Derived; ui: UIState; }
 
 /**
- * Import da Slope sospeso: si lavora sui dati dimostrativi finché non arriva la databox.
+ * Import manuale da Slope sospeso: le prenotazioni arrivano ogni mattina dallo scatto di La Scatola.
  * Per riattivarlo basta rimettere true: il codice dell'import è rimasto intatto.
  */
 export const IMPORT_ATTIVO = false;
@@ -142,7 +142,7 @@ function fonteDati(c: Ctx, li: { at: string } | null): string {
   }
   if (c.ui.scatolaErrore) return `<span class="fonte stale">Scatto di La Scatola non leggibile</span>`;
   if (IMPORT_ATTIVO) return li ? `Ultimo import ${fmtDate(li.at.slice(0, 10))}, ${li.at.slice(11, 16)}` : "Nessun import";
-  return "Dati dimostrativi — import sospeso";
+  return "Scatto di La Scatola non disponibile";
 }
 
 /**
@@ -203,31 +203,17 @@ function hotelSwitch(c: Ctx, withGroup: boolean): string {
     .join("")}</div>`;
 }
 
-/** Comandi dei dati dimostrativi: mentre l'import è sospeso stanno nelle Impostazioni. */
-export function demoBlock(c: Ctx): string {
-  const quante = [...c.app.reservations.values()].filter((r) => r.id.startsWith("DEMO-")).length;
-  const altre = c.app.reservations.size - quante;
-  return `<h3 class="sec">Dati dimostrativi</h3>
-    <article class="card">
-      ${IMPORT_ATTIVO ? "" : `<p>L'import da Slope è <b>sospeso</b> in attesa della databox. Finché dura, la piattaforma lavora su dati inventati: servono a provare le funzioni e a decidere insieme come devono comportarsi, non a prendere decisioni di vendita.</p>`}
-      <p class="muted"><b>Scenario di prova completo</b>: una settimana sovravenduta su tutte e tre le case, con gruppi, ospiti abituali, non rimborsabili, doppie prenotazioni, prenotazioni da annullare per motivo valido, lista d'attesa e registro già pieni. <b>Solo dati dimostrativi</b>: un anno di storico più le prenotazioni future, senza conflitti costruiti apposta.</p>
-      <div class="row demo"><button class="btn gold sm" data-act="demo-scenario">Scenario di prova completo</button><button class="btn ghost sm" data-act="demo-load">Solo dati dimostrativi</button><button class="btn ghost sm" data-act="demo-clear">Elimina i dati dimostrativi</button></div>
-      <p class="muted"><small>In archivio ci sono ${quante} prenotazioni dimostrative${altre ? ` e ${altre} prenotazioni importate da Slope, che restano dove sono: non le tocco` : ""}.${altre ? " Se vuoi ripartire pulito, dimmelo e aggiungo il comando per toglierle." : ""}</small></p>
-    </article>`;
-}
-
 function emptyState(): string {
   if (!IMPORT_ATTIVO) {
     return `<section class="empty-state">
       <h2>Nessuna prenotazione caricata</h2>
-      <p>L'import da Slope è sospeso: si lavora sui dati dimostrativi finché non arriva la databox. Lo scenario di prova costruisce una settimana sovravenduta su tutte e tre le case, con gruppi, abituali, doppie prenotazioni e cancellazioni motivate: serve a vedere come si comporta la piattaforma.</p>
-      <div class="row"><button class="btn gold" data-act="demo-scenario">Scenario di prova completo</button><button class="btn ghost" data-act="demo-load">Solo dati dimostrativi</button></div>
+      <p>Le prenotazioni arrivano ogni mattina dallo scatto di La Scatola (dati di Slope). Se questa pagina è vuota, lo scatto di oggi non è ancora stato pubblicato o non è leggibile: riprova più tardi, e se resta vuota avvisa chi gestisce la piattaforma.</p>
     </section>`;
   }
   return `<section class="empty-state">
     <h2>Nessuna prenotazione caricata</h2>
     <p>La guida si calcola sullo storico di Slope: servono le prenotazioni degli ultimi 12-24 mesi, cancellate comprese, più tutte quelle future.</p>
-    <div class="row"><button class="btn gold" data-act="tab" data-v="import">Importa da Slope</button><button class="btn ghost" data-act="demo-scenario">Scenario di prova completo</button><button class="btn ghost" data-act="demo-load">Solo dati dimostrativi</button></div>
+    <div class="row"><button class="btn gold" data-act="tab" data-v="import">Importa da Slope</button></div>
   </section>`;
 }
 
@@ -490,8 +476,6 @@ export function viewImport(c: Ctx): string {
     ${hist.length ? `<div class="scroll"><table class="mini"><thead><tr><th>Quando</th><th>File</th><th>Casa</th><th>Righe</th><th>Nuove</th><th>Aggiornate</th><th>Scartate</th></tr></thead><tbody>${hist
       .map((h) => `<tr><td>${fmtDate(h.at.slice(0, 10))} ${h.at.slice(11, 16)}</td><td>${esc(h.file)}</td><td>${esc(h.hotelId === "multi" ? "più case" : hotelName(s, h.hotelId))}</td><td>${h.rows}</td><td>${h.inserted}</td><td>${h.updated}</td><td>${h.skipped}</td></tr>`)
       .join("")}</tbody></table></div>` : `<p class="muted">Ancora nessun import.</p>`}
-    <div class="row demo"><button class="btn ghost sm" data-act="demo-load">Carica dati dimostrativi</button><button class="btn gold sm" data-act="demo-scenario">Scenario di prova completo</button><button class="btn ghost sm" data-act="demo-clear">Elimina tutti i dati dimostrativi</button></div>
-    <p class="muted narrow"><small>Lo scenario di prova aggiunge una settimana deliberatamente sovravenduta in tutte e tre le case, con gruppi, ospiti abituali, Expedia Collect, tag NO OVERBOOKING, non rimborsabili, doppie prenotazioni, una lista d'attesa e un registro esiti già compilato: serve per verificare tutta la catena in pochi minuti.</small></p>
   </section>`;
 }
 
@@ -607,7 +591,6 @@ export function viewSettings(c: Ctx): string {
     <article class="card"><label class="field">Firma delle email (vuoto = «Il team di ricevimento» e il nome della casa)<textarea data-path="mailSignature" data-type="text" rows="4" placeholder="Il team di ricevimento&#10;Smart Hotel Saslong – AlpStay Hotels&#10;Telefono · email">${esc(s.mailSignature ?? "")}</textarea></label></article>
     <h3 class="sec">Commissioni per canale (%)</h3>
     <article class="card"><div class="grid4">${channels.map((ch) => `<label class="field">${esc(ch)}<input type="number" min="0" max="40" step="0.5" data-comm="${esc(ch)}" value="${s.channelCommission[ch] ?? 0}"></label>`).join("")}</div></article>
-    ${IMPORT_ATTIVO ? "" : demoBlock(c)}
     <div class="savebar"><button class="btn gold" data-act="settings-save" ${c.app.canWrite ? "" : "disabled"}>Salva impostazioni</button><button class="btn ghost" data-act="settings-discard">Annulla modifiche</button><span class="grow"></span><button class="btn ghost sm" data-act="settings-reset">Ripristina valori iniziali</button></div>
   </section>`;
 }

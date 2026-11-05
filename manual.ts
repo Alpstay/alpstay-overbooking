@@ -32,7 +32,7 @@ const CAPITOLI: Capitolo[] = [
     corpo: (c) => `
       <p>Dieci minuti, sempre gli stessi passi.</p>
       <ol class="info-ol">
-        ${IMPORT_ATTIVO ? `<li><b>Importa l'export di Slope</b> del giorno, cancellate comprese. Senza dati nuovi la piattaforma ragiona su ieri.</li>` : `<li><b>Import sospeso.</b> In attesa della databox di Slope si lavora sui dati dimostrativi: le funzioni sono tutte attive, i numeri sono inventati.</li>`}
+        ${IMPORT_ATTIVO ? `<li><b>Importa l'export di Slope</b> del giorno, cancellate comprese. Senza dati nuovi la piattaforma ragiona su ieri.</li>` : `<li><b>Dati di Slope ogni mattina.</b> Le prenotazioni arrivano dallo scatto giornaliero di La Scatola: in testa alla pagina c'è la data dello scatto. Se è vecchio di più di un giorno, la piattaforma lo dice sopra i numeri.</li>`}
         <li>Apri la <b>${go("guida", "Guida strategica")}</b> e guarda le tre schede in alto. «Oltre soglia» sono le notti da sistemare oggi, «Vendibili oltre capienza» quelle su cui puoi ancora vendere, «Soglia raggiunta» quelle da chiudere sul channel manager.</li>
         <li>Per ogni notte oltre soglia premi <b>Risolvi</b>: si apre il Problem solving già posizionato su quella data, con il piano pronto.</li>
         <li>Esegui il piano <b>in ordine di sequenza</b> e segna in Slope i cambi che fai.</li>
