@@ -240,7 +240,7 @@ const RADAR_HTML = `
       <button role="tab" data-rtab="confronto" aria-pressed="true" aria-selected="true">Confronto</button>
       <button role="tab" data-rtab="barometro" aria-pressed="false" aria-selected="false">Barometro</button>
       <button role="tab" data-rtab="variazioni" aria-pressed="false" aria-selected="false">Variazioni</button>
-      <button role="tab" data-rtab="nuova" aria-pressed="false" aria-selected="false">Nuova rilevazione</button>
+      <button role="tab" data-rtab="nuova" aria-pressed="false" aria-selected="false">Da cercare <span class="rp-count" id="rp-cerca-n" hidden></span></button>
       <button role="tab" data-rtab="storico" aria-pressed="false" aria-selected="false">Storico</button>
       <button role="tab" data-rtab="guida" aria-pressed="false" aria-selected="false">Come funziona</button>
     </div>
@@ -305,8 +305,14 @@ const RADAR_HTML = `
   </section>
 
   <section class="rp-tab" id="rp-tab-nuova" hidden>
+    <h2 class="lead">Le settimane da cercare su Booking adesso.</h2>
+    <p class="rp-note">Le sceglie la piattaforma dallo scatto di La Scatola di oggi: prima le settimane con notti in overbooking (servono i prezzi per ricollocare), poi quelle con poche camere vendute (serve capire se il prezzo frena). Non compaiono le settimane già cercate negli ultimi 7 giorni né quelle con la casa chiusa. «Cerca su Booking» apre la ricerca con località, date, 2 adulti e 1 camera: aggiungi i filtri <b>Hotel</b> e <b>Bed &amp; Breakfast</b> e fai gli screenshot.</p>
+    <div class="rp-tbl"><table>
+      <thead><tr><th>#</th><th>Settimana</th><th>Casa</th><th>Perché</th><th>Ultima ricerca</th><th></th></tr></thead>
+      <tbody id="rp-cerca"></tbody>
+    </table></div>
     <article class="card rp-new">
-      <h3>Nuova rilevazione</h3>
+      <h3>Poi carica gli screenshot</h3>
       <p>Gli screenshot di Booking si caricano nel <b>Radar prezzi su claude.ai</b>: lì Claude li legge, tu controlli le righe e le salvi. Qui la pagina non può leggere immagini.</p>
       <p>Le rilevazioni salvate compaiono in questa scheda <b>la mattina dopo</b>, con l'aggiornamento giornaliero insieme allo scatto di La Scatola.</p>
       <div class="rp-actions"><a class="btn gold" href="${ARTIFACT_RADAR}" target="_blank" rel="noopener">Apri il Radar su claude.ai</a></div>
@@ -320,6 +326,7 @@ const RADAR_HTML = `
       <article class="rp-step"><span class="rp-step-n">1</span><div>
         <h3>Fai la ricerca su Booking</h3>
         <ul>
+          <li>Parti dalla scheda <b>Da cercare</b>: ti dice quali settimane servono e apre Booking con località e date giuste.</li>
           <li>Località della casa: <b>S. Cristina</b> per Saslong, <b>Ortisei</b> per Hartmann, <b>Selva</b> per Acadia.</li>
           <li>Date del periodo da valutare, <b>2 adulti, 1 camera</b>.</li>
           <li>Filtri: <b>Hotel</b> e <b>Bed &amp; Breakfast</b>. Togli <b>"Animali ammessi"</b>, altrimenti spariscono molti hotel.</li>
@@ -787,6 +794,98 @@ function creaRadar(): { el: HTMLElement; start: (s: ScatolaSnapshot | null) => v
     $("#rp-tab-barometro").scrollIntoView({ behavior: "smooth" });
   });
 
+  /* ---------- Settimane da cercare ---------- */
+  /** Località da scrivere nella ricerca di Booking, una per casa. */
+  const BOOKING_LOC: Record<string, string> = { Saslong: "Santa Cristina Valgardena", Hartmann: "Ortisei", Acadia: "Selva di Val Gardena" };
+  const linkBooking = (casa: string, ci: string, co: string): string =>
+    "https://www.booking.com/searchresults.it.html?ss=" + encodeURIComponent(BOOKING_LOC[casa] ?? CASE[casa].loc) +
+    `&checkin=${ci}&checkout=${co}&group_adults=2&group_children=0&no_rooms=1`;
+
+  interface DaCercare { pk: string; casa: string; punti: number; motivi: string[]; ultima: string | null; giorni: number | null }
+
+  /** Notti della settimana in cui almeno una tipologia della casa è venduta oltre le camere disponibili. */
+  function nottiOltre(hotelId: HotelId, da: string, a: string): number {
+    if (!scatola) return 0;
+    const casa = scatola.case.find((c) => c.hotelId === hotelId);
+    if (!casa) return 0;
+    const camere = new Map(casa.tipologie.map((t) => [t.id, t.camere]));
+    const notti = new Set<string>();
+    for (const [giorno, casaId, tipId, , chiusure, confermate] of scatola.capienza) {
+      if (casaId !== casa.scatolaId || giorno < da || giorno >= a) continue;
+      const fisiche = camere.get(tipId);
+      if (fisiche != null && confermate > fisiche - chiusure) notti.add(giorno);
+    }
+    return notti.size;
+  }
+
+  /** Ultima ricerca Booking che copre la maggior parte della settimana (almeno 4 notti su 7). */
+  function ultimaRicerca(casa: string, da: string, a: string): string | null {
+    let ult: string | null = null;
+    for (const r of rows) {
+      if (r.casa !== casa) continue;
+      const ini = r.checkIn > da ? r.checkIn : da, fin = r.checkOut < a ? r.checkOut : a;
+      if (nottiFra(ini, fin) < 4) continue;
+      if (!ult || r.rilevatoIl > ult) ult = r.rilevatoIl;
+    }
+    return ult;
+  }
+
+  /**
+   * Le settimane da cercare: da sabato a sabato, da fra 3 giorni a fra 150, nella finestra dello scatto.
+   * Contano l'overbooking (prima di tutto), le camere vendute sotto il 70%, quanto manca all'arrivo
+   * e da quanto non si cerca. Escluse le case chiuse e le settimane cercate negli ultimi 7 giorni.
+   */
+  function daCercare(): DaCercare[] {
+    if (!scatola) return [];
+    const oggi = today();
+    let sab = piuGiorni(oggi > scatola.finestra.da ? oggi : scatola.finestra.da, 3);
+    while (new Date(t0(sab)).getUTCDay() !== 6) sab = piuGiorni(sab, 1);
+    const limite = piuGiorni(oggi, 150);
+    const out: DaCercare[] = [];
+    for (; piuGiorni(sab, 6) <= scatola.finestra.a && sab <= limite; sab = piuGiorni(sab, 7)) {
+      const fine = piuGiorni(sab, 7), pk = `${sab}_${fine}`;
+      for (const casa of ORDINE) {
+        const o = occDi(casa, pk);
+        if (!o || o.occPct == null || o.coperte < o.notti || o.vendute === 0) continue;
+        const oltre = nottiOltre(CASE[casa].hotelId, sab, fine);
+        const motivi: string[] = [];
+        let punti = 0;
+        if (oltre > 0) { punti += 50 + 5 * oltre; motivi.push(`${oltre} ${oltre === 1 ? "notte" : "notti"} in overbooking: servono i prezzi per ricollocare`); }
+        if (o.occPct < 50) { punti += 30; motivi.push(`venduto solo il ${Math.floor(o.occPct)}%: il prezzo frena?`); }
+        else if (o.occPct < 70) { punti += 15; motivi.push(`venduto il ${Math.floor(o.occPct)}%`); }
+        if (!motivi.length) continue;
+        const ultima = ultimaRicerca(casa, sab, fine);
+        const giorni = ultima ? nottiFra(ultima, oggi) : null;
+        if (giorni != null && giorni <= 7) continue;
+        punti += giorni == null ? 20 : giorni > 21 ? 10 : 0;
+        const mancano = nottiFra(oggi, sab);
+        punti += mancano <= 45 ? 25 : mancano <= 90 ? 15 : 5;
+        out.push({ pk, casa, punti, motivi, ultima, giorni });
+      }
+    }
+    return out.sort((x, y) => y.punti - x.punti || (x.pk < y.pk ? -1 : 1)).slice(0, 6);
+  }
+
+  function renderDaCercare(): void {
+    const tb = $("#rp-cerca"), n = $("#rp-cerca-n");
+    if (!caricato) { tb.innerHTML = `<tr><td colspan="6" class="muted">Carico…</td></tr>`; return; }
+    if (!scatola) { tb.innerHTML = `<tr><td colspan="6" class="muted">Lo scatto di La Scatola non è disponibile: senza, non so quali settimane cercare.</td></tr>`; n.hidden = true; return; }
+    const list = daCercare();
+    n.hidden = !list.length;
+    n.textContent = String(list.length);
+    tb.innerHTML = list.length ? list.map((x, i) => {
+      const [a, b] = x.pk.split("_");
+      const urgente = x.motivi[0].includes("overbooking");
+      return `<tr>
+    <td>${i + 1}</td>
+    <td>${dIt(a)} → ${dIt(b)}</td>
+    <td>${esc(x.casa)}<br><span class="muted">${esc(CASE[x.casa].loc)}</span></td>
+    <td>${x.motivi.map((m, j) => j === 0 ? `<span class="rp-pill ${urgente ? "sopra" : "sotto"}">${esc(m)}</span>` : `<br><span class="muted">${esc(m)}</span>`).join("")}</td>
+    <td>${x.ultima ? `${dIt(x.ultima)}<br><span class="muted">${x.giorni} giorni fa</span>` : '<span class="rp-badge-warn">mai</span>'}</td>
+    <td><a class="btn gold sm" href="${linkBooking(x.casa, a, b)}" target="_blank" rel="noopener">Cerca su Booking</a></td></tr>`;
+    }).join("") : `<tr><td colspan="6" class="muted">Niente da cercare adesso: le settimane con overbooking o poche camere vendute sono già state cercate negli ultimi 7 giorni.</td></tr>`;
+  }
+
   /* ---------- PDF per email ---------- */
   const pdfTxt = (s: unknown): string => String(s ?? "").replace(/★/g, "*").replace(/[−–—]/g, "-").replace(/→/g, "-").replace(/[^\x20-\x7E\xA0-\xFF€]/g, "");
   const eurP = (n: number | null): string => n == null || isNaN(n) ? "-" : Math.round(n).toLocaleString("it-IT") + " €";
@@ -881,7 +980,7 @@ function creaRadar(): { el: HTMLElement; start: (s: ScatolaSnapshot | null) => v
   $("#rp-btn-pdf-close").addEventListener("click", () => { $("#rp-pdf-box").hidden = true; });
 
   /* ---------- Render e dati ---------- */
-  function renderAll(): void { renderPeriodi(); renderConfronto(); renderBarometro(); renderCritici(); renderVariazioni(); renderStorico(); }
+  function renderAll(): void { renderPeriodi(); renderConfronto(); renderBarometro(); renderCritici(); renderDaCercare(); renderVariazioni(); renderStorico(); }
   $("#rp-periodo").addEventListener("change", renderConfronto);
   renderAll();
 
