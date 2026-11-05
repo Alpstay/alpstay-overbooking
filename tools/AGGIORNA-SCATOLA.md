@@ -75,11 +75,23 @@ scatto mostra le camere invece dei nomi e il controllo delle doppie prenotazioni
 7. **Verifica**: `python3 tools/verifica_scatola.py scatola.json c1.json,c2.json "<PASSWORD>"`
    deve finire con `verifica OK`. Passa i file degli intestatari e la password: è il controllo
    che nessun nome, email o telefono sia finito in chiaro e che il blocco cifrato si riapra.
-8. **Controllo dei tipi e costruzione**: `npm install && npm run check && npm run build`.
+8. **Radar prezzi**: leggi il database dell'artifact Radar prezzi
+   (`https://claude.ai/artifact/T5zW9i3ege9onzFs3VrNxB`) con ArtifactData, azione `list`,
+   collezioni `rilevazioni` e `barometro`, `query.limit` 1000 e `out_dir` una cartella dello
+   scratchpad (segui `next_cursor` se c'è). Poi, dalla cartella del repository:
+   ```
+   python3 tools/costruisci_radar.py <out_dir> -o radar.json
+   ```
+   Gli ID dei documenti diventano il campo `id` così come sono, e i campi si copiano identici.
+   Il resoconto su stderr dice quante rilevazioni ci sono: devono essere almeno quante ieri,
+   salvo eliminazioni fatte dallo staff. Se l'artifact non risponde o lo script si ferma,
+   **non toccare `radar.json`**: resta quello di ieri, e lo scatto si pubblica lo stesso.
+9. **Controllo dei tipi e costruzione**: `npm install && npm run check && npm run build`.
    Se il controllo dei tipi non passa, non pubblicare.
-9. **Pubblica**: `git add scatola.json`, commit `Scatola G`, `git push origin HEAD:main`.
-10. **Riepilogo** in italiano, senza nomi: periodo coperto, prenotazioni per casa, notti in
-    conflitto per casa, freschezza di La Scatola, e qualunque cosa sia andata storta.
+10. **Pubblica**: `git add scatola.json radar.json`, commit `Scatola G`, `git push origin HEAD:main`.
+11. **Riepilogo** in italiano, senza nomi: periodo coperto, prenotazioni per casa, notti in
+    conflitto per casa, freschezza di La Scatola, rilevazioni del Radar e ultima data
+    rilevata, e qualunque cosa sia andata storta.
 
 ## Cosa fa la piattaforma con lo scatto
 

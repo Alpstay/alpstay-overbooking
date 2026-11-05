@@ -21,6 +21,7 @@ import { daySheet } from "./dayplan";
 import { viewWaitlist, mailSheet, waitInfoSheet, readWaitForm, entryFromReservation } from "./waitlist";
 import { viewRegister, caseSheet, registerInfoSheet } from "./register";
 import { viewManual } from "./manual";
+import { viewRadar, radarMount } from "./radar";
 import { viewLogin, viewLoginKo, loginVuoto } from "./login";
 import type { LoginState } from "./login";
 import { accedi, esci, initFirebase, attendiAuth, messaggioAuth, reimpostaPassword, utenteCorrente } from "./firebase";
@@ -134,6 +135,7 @@ function render(): void {
     registro: viewRegister,
     pren: viewReservations,
     storico: viewHistory,
+    radar: viewRadar,
     import: viewImport,
     settings: viewSettings,
   };
@@ -141,6 +143,8 @@ function render(): void {
   const scrollY = window.scrollY;
   if (typeof hideTip === "function") hideTip();
   root.innerHTML = header(c) + `<main>${views[ui.tab](c)}</main>` + appFooter() + (ui.caseId ? caseSheet(c, ui.caseId) : ui.mail ? mailSheet(c, ui.mail) : ui.detail ? detailSheet(c, ui.detail) : ui.day ? daySheet(c, ui.day) : ui.info === "legend" ? legendSheet(c) : ui.info === "moves" ? movesInfoSheet(c) : ui.info === "nights" ? nightsInfoSheet(c) : ui.info === "channels" ? channelsInfoSheet(c) : ui.info === "rooms" ? roomsInfoSheet(c) : ui.info === "waitlist" ? waitInfoSheet() : ui.info === "spec" ? specInfoSheet(c) : ui.info === "registro" ? registerInfoSheet(c) : ui.info === "pesi" ? weightsInfoSheet(c) : ui.info === "azioni" ? azioniInfoSheet(c) : ui.info === "cancellazioni" ? cancelInfoSheet(c) : "") + busyOverlay(ui.busy) + `<div id="toast" role="status" aria-live="polite"></div>`;
+  // Il Radar prezzi è un elemento che sopravvive ai ridisegni: qui torna al suo posto.
+  if (ui.tab === "radar") radarMount(ui.scatola);
   window.scrollTo(0, scrollY);
 }
 

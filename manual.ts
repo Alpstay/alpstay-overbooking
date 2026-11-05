@@ -52,6 +52,7 @@ const CAPITOLI: Capitolo[] = [
         <li><b>Registro</b><p>Com'è finita ogni posizione di overbooking, con costi e motivi, e le statistiche che ne nascono. In fondo, tutta la corrispondenza mandata agli ospiti.</p></li>
         <li><b>Prenotazioni</b><p>L'elenco completo con tutti i filtri: serve per cercare un ospite, controllare una prenotazione, verificare perché risulta protetta.</p></li>
         <li><b>Storico</b><p>Da dove nascono le previsioni: come si cancella per canale e per anticipo, quali canali portano valore affidabile e quali portano camere che poi spariscono.</p></li>
+        <li><b>Radar prezzi</b><p>I prezzi delle tre case contro i concorrenti su Booking e il barometro della domanda, con le camere vendute prese dallo scatto di La Scatola. Gli screenshot si caricano nel Radar su claude.ai e compaiono qui la mattina dopo.</p></li>
         <li><b>Impostazioni</b><p>Camere e tipologie di ogni casa, soglie di rischio, cosa rende una prenotazione intoccabile, i pesi che decidono chi si sposta per primo, i periodi di alta stagione, le commissioni per canale, la firma delle email.</p></li>
       </ul>
       <p class="muted">Quasi ogni tabella ha accanto al titolo un pulsante <span class="info-btn" aria-hidden="true">i</span>: apre la spiegazione dettagliata di quella tabella, con i criteri che la piattaforma applica e la strategia da adottare.</p>`,

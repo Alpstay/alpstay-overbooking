@@ -14,7 +14,8 @@ iniettato dentro `shell.html`, che contiene tutto il CSS. Il risultato è `dist/
 un file unico che funziona aperto da qualsiasi parte, anche senza rete.
 
 L'unica dipendenza a runtime è SheetJS, caricata da CDN, usata per leggere e scrivere i file
-Excel dell'import e degli export.
+Excel dell'import e degli export. Il Radar prezzi carica jsPDF dallo stesso CDN, e solo quando
+si chiede il PDF.
 
 ```
 main.ts          avvio, instradamento, gestione degli eventi
@@ -34,6 +35,7 @@ dayplan.ts       pannello della singola notte
 waitlist.ts      lista d'attesa e pannello email
 register.ts      registro degli esiti, statistiche, corrispondenza
 manual.ts        pagina "Come funziona"
+radar.ts         scheda Radar prezzi: legge radar.json, occupazione dallo scatto
 info.ts          schede informative delle tabelle
 storage.ts       persistenza
 demo.ts          dati dimostrativi
@@ -62,6 +64,7 @@ Per attivarlo la prima volta: **Settings → Pages → Source: GitHub Actions**.
 | --- | --- | --- |
 | Prenotazioni, capienza, chiusure, saldi | `scatola.json`, scatto giornaliero di La Scatola | vedi sotto |
 | Impostazioni, lista d'attesa, registro, corrispondenza | Firestore, se configurato; altrimenti archivio del browser | vedi più sotto |
+| Rilevazioni prezzi e dati di mercato del Radar prezzi | `radar.json`, copiato ogni mattina dal Radar su claude.ai | sola lettura; si ricostruisce con `tools/costruisci_radar.py` |
 
 ## Il collegamento con La Scatola
 

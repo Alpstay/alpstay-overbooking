@@ -24,7 +24,7 @@ import { avvisoScatola, etaOre } from "./scatola";
 
 export const MAX_SOLVE_NIGHTS = 90;
 
-export type Tab = "guida" | "solve" | "attesa" | "registro" | "pren" | "storico" | "import" | "settings" | "manuale";
+export type Tab = "guida" | "solve" | "attesa" | "registro" | "pren" | "storico" | "radar" | "import" | "settings" | "manuale";
 
 export interface Derived {
   rev: number;
@@ -80,6 +80,7 @@ const TABS_ALL: [Tab, string][] = [
   ["registro", "Registro"],
   ["pren", "Prenotazioni"],
   ["storico", "Storico"],
+  ["radar", "Radar prezzi"],
   ["import", "Importa da Slope"],
   ["settings", "Impostazioni"],
   ["manuale", "Come funziona"],

@@ -1,5 +1,6 @@
 // Costruisce la pagina unica: TypeScript -> bundle -> iniettato dentro shell.html.
-// Nessun framework, nessuna dipendenza a runtime oltre a SheetJS, che la pagina carica da CDN.
+// Nessun framework, nessuna dipendenza a runtime oltre a SheetJS, che la pagina carica da CDN
+// (e jsPDF, caricato da CDN solo quando si crea il PDF del Radar prezzi).
 import { build } from "esbuild";
 import { readFile, writeFile, mkdir, copyFile } from "node:fs/promises";
 
@@ -31,6 +32,14 @@ try {
   console.log("scatola.json copiato in dist");
 } catch {
   console.log("scatola.json assente: la pagina partirà senza scatto");
+}
+// Le rilevazioni del Radar prezzi, stesso principio: se mancano, la scheda Radar lo dice e il
+// resto della piattaforma lavora come sempre.
+try {
+  await copyFile("radar.json", `${OUT}/radar.json`);
+  console.log("radar.json copiato in dist");
+} catch {
+  console.log("radar.json assente: la scheda Radar prezzi partirà senza rilevazioni");
 }
 // GitHub Pages non serve i file dentro cartelle che iniziano con "_" senza questo file.
 await writeFile(`${OUT}/.nojekyll`, "");
