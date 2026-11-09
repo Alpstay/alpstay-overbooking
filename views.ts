@@ -8,6 +8,7 @@ import { FIELDS, missingRequired, normalize, resKey } from "./importer";
 import { actionOf, isActive } from "./forecast";
 import { channelStats, washProb, LEAD_BUCKETS, washSampleSize, netValue } from "./analytics";
 import { renderTable, Column } from "./table";
+import { riquadroMeteo } from "./meteo";
 import { skyline, washChart, monthBars, meter } from "./charts";
 import { board, boardLegend } from "./board";
 import { infoButton } from "./info";
@@ -263,6 +264,7 @@ export function viewGuide(c: Ctx): string {
     ${fixedRoomsNotice(c)}
     ${specBanner(c)}
     <h2 class="lead">${esc(name)}: ${esc(lead)}</h2>
+    ${riquadroMeteo(c.d.list, c.ui.hotel)}
     ${skyline(fc, c.app.settings.freezeDays)}
     <div class="legend"><span><i class="k vendi"></i>Vendi in overbooking</span><span><i class="k stop"></i>Soglia raggiunta</span><span><i class="k rischio"></i>Oltre soglia</span><span><i class="k pieno"></i>Oltre 85%</span><span><i class="k libero"></i>Vendita normale</span><span><i class="k ceil"></i>Soglia vendibile</span><span><i class="k cap"></i>Capienza</span><span><i class="k ev"></i>Alta stagione / evento</span></div>
     <div class="cols3">

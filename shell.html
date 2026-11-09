@@ -609,6 +609,19 @@ tr.specalta td:first-child{box-shadow:inset 3px 0 0 var(--risk)}
 #radar-root .rp-new p{margin:0 0 12px}
 #radar-root .rp-new .rp-actions{margin-top:18px}
 #radar-root a.btn{text-decoration:none}
+
+/* rischio meteo nella guida */
+.meteo{border:1px solid var(--line);border-left:3px solid var(--sell);border-radius:0 2px 2px 0;padding:14px 18px;background:var(--bg);max-width:96ch}
+.meteo.medio{border-left-color:var(--full)}.meteo.alto{border-left-color:var(--risk)}
+.meteo>*+*{margin-top:10px}
+.meteo header{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:12.5px}
+.meteo p{margin:0;font-size:14px}
+.meteo-f{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 18px}
+.meteo-f li{display:grid;grid-template-columns:1fr auto 2.5ch;gap:8px;font-size:13px;border-bottom:1px solid var(--line);padding:4px 0}
+.meteo-f b{color:var(--ink);font-weight:500}.meteo-f i{font-style:normal;text-align:right}
+.meteo-g{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.meteo-g li{display:grid;justify-items:center;border:1px solid var(--line);border-radius:2px;padding:5px 9px;font-size:12px;min-width:64px}
+.meteo-g b{font:500 13px/1.2 Oswald,sans-serif;color:var(--ink)}.meteo-g small{color:var(--muted)}
 </style>
 </head>
 <body>

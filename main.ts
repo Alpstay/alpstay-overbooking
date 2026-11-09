@@ -1,4 +1,5 @@
 import type { AppState, HotelId, Reservation, Settings, ImportLog, SeasonEvent, MappingField, MailLogEntry } from "./types";
+import { caricaMeteo } from "./meteo";
 import { Store, takeRepaired } from "./storage";
 import { defaultSettings, emptyMeta, SETTINGS_VERSION } from "./defaults";
 import { autoMap, normalize, readFile, resKey } from "./importer";
@@ -953,6 +954,8 @@ async function avvia(): Promise<void> {
     toast("Impossibile leggere i dati salvati: " + (e instanceof Error ? esc(e.message) : ""), "err");
   }
   render();
+  // Il meteo arriva da un servizio esterno: la pagina non lo aspetta, lo aggiunge quando c'è.
+  void caricaMeteo().then(() => { if (ui.tab === "guida") render(); });
   store.watchMeta(async (m) => {
     if ((m.revision ?? 0) > (app.meta.revision ?? 0)) {
       await loadAll();
