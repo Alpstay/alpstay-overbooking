@@ -32,7 +32,8 @@ scatto mostra le camere invece dei nomi e il controllo delle doppie prenotazioni
 - Tre case, `property_id` di Slope:
   - `11111111-1111-4111-8111-111111111111` Hotel Acadia (21 camere, 3 tipologie)
   - `22222222-2222-4222-8222-222222222222` Chalet Hartmann (9 unità, 3 tipologie)
-  - `33333333-3333-4333-8333-333333333333` Smart Hotel Saslong (56 camere, 4 tipologie)
+  - `33333333-3333-4333-8333-333333333333` Smart Hotel Saslong (56 camere su 4 tipologie in
+    Slope, ma **nello scatto sono 49 su 3**: vedi sotto)
 - `G` = oggi nel fuso Europe/Rome. La finestra dello scatto è `G` → `G+190`: copre la stagione
   invernale, che è l'unico periodo in cui l'overbooking è un problema.
 - **Una riga assente in `curated_availability_daily` vuol dire tipologia completamente libera**
@@ -40,12 +41,37 @@ scatto mostra le camere invece dei nomi e il controllo delle doppie prenotazioni
   fisiche si prendono dalla tabella delle tipologie e non dalla somma delle righe del giorno:
   sommare le righe inventerebbe deficit che non esistono. Verificato il 23 ottobre 2026 su una
   notte in cui il Saslong sembrava in deficit di 5 camere ed era in avanzo di 4.
+- **La quarta tipologia del Saslong non entra nello scatto, ed è giusto così.** È
+  `50ff0784-3226-4bdc-b6f4-47808c364f25`, 7 camere fisiche (49 + 7 = le 56 di Slope). In
+  `curated_availability_daily` ha 545 righe, tutte **fino al 2026-10-27** e quasi tutte
+  chiusure con `confirmed_occupied` a zero; in `curated_reservations` ha **zero prenotazioni,
+  da sempre**. Sono camere che esistono ma non si vendono. Nella finestra dello scatto non ha
+  nessuna riga, quindi non compare, e lo scatto dichiara 3 tipologie e 49 camere al Saslong.
+  Tenerle fuori è la scelta prudente: dichiararle libere gonfierebbe la capienza e farebbe
+  sparire conflitti veri. Accertato il 19 novembre 2026. Se la reception inizia a venderle, la
+  tipologia ricomparirà da sola appena avrà una prenotazione o una chiusura nella finestra.
 
 ## Passi
 
 1. **Freschezza**: `get_freshness`. Qualunque sia l'esito si prosegue — il valore finisce nello
    scatto e la pagina lo mostra — ma se `lodging_reservation` non si aggiorna da più di 6 ore
    dillo nel riepilogo.
+   Come si scaricano le quattro viste dei passi 2-5, imparato il 19 novembre 2026 — sono
+   circa 24.000 righe in 240 pagine, e farlo male costa un'ora:
+   - **Il gateway taglia la risposta a ~64 KB**, cioè 50-65 righe per pagina, qualunque
+     `limit` chiedi. `limit` alto non riduce le pagine.
+   - **Su `curated_reservation_contacts` `limit: 500` viene rifiutato** con `Invalid input:
+     correct the named field and use the allowed value or bound`, che non c'entra niente con i
+     filtri. Usa `limit: 50`.
+   - Quello stesso `Invalid input` capita **a intermittenza** anche con un `limit` buono e un
+     cursore valido: ritenta la stessa chiamata, passa. Non è un cursore scaduto e non sono i
+     filtri sbagliati.
+   - I cursori scadono in circa un'ora: non interrompere una paginazione a metà.
+   - Quando il risultato è troppo grande per il contesto, l'errore dice dove è stato salvato il
+     file grezzo: **copia quel file** nello scratchpad invece di ricopiare il JSON a mano. È
+     più fedele e, sugli intestatari, evita che i dati personali ti passino davanti.
+   - Conviene **spezzare per `property_id`** e scaricare le tre case in parallelo con tre
+     agenti: i cursori sono sequenziali, le case no.
 2. **Capienza e occupazione**: `query_curated_view` su `curated_availability_daily` con filtri
    `day gte G`, `day lte G+190`. Segui `next_cursor` finché non è nullo e controlla che
    `page.returned` sommi a `page.total`. Salva ogni pagina in un file dello scratchpad così
@@ -61,6 +87,11 @@ scatto mostra le camere invece dei nomi e il controllo delle doppie prenotazioni
    prenotato. **Contiene dati personali**: non mostrarli, non riassumerli, non scriverli nel
    riepilogo; usa i file così come sono. Non usare `curated_guest_stays`: contiene solo gli
    ospiti già registrati al check-in e sulle prenotazioni future è quasi sempre vuota.
+   Questa vista dà molto più di un nome: email, telefono, data e luogo di nascita,
+   cittadinanza, genere, documento d'identità, residenza, partita IVA, e un `checkin_url` che
+   la vista stessa definisce credenziale. Lo scatto ne usa solo il cognome in forma breve.
+   Quindi **a scatto costruito e verificato, cancella le pagine degli intestatari dallo
+   scratchpad**: servono per il passo 6 e il passo 7, non dopo.
 6. **Costruisci**, dalla cartella del repository:
    ```
    python3 tools/costruisci_scatola.py \
@@ -70,11 +101,20 @@ scatto mostra le camere invece dei nomi e il controllo delle doppie prenotazioni
        --da G --a G+190 > scatola.json
    ```
    Leggi il resoconto su stderr: le prenotazioni per casa devono essere centinaia, le
-   tipologie 3, 3 e 4, e i nomi cifrati devono coprire almeno l'80% delle prenotazioni. Una
-   riga `ATTENZIONE` va capita prima di andare avanti.
+   tipologie 3, 3 e 3 (Acadia 21 camere, Hartmann 9, Saslong 49 — la quarta tipologia del
+   Saslong non entra, vedi «Dati»), e i nomi cifrati devono coprire almeno l'80% delle
+   prenotazioni. Una riga `ATTENZIONE` va capita prima di andare avanti.
 7. **Verifica**: `python3 tools/verifica_scatola.py scatola.json c1.json,c2.json "<PASSWORD>"`
    deve finire con `verifica OK`. Passa i file degli intestatari e la password: è il controllo
    che nessun nome, email o telefono sia finito in chiaro e che il blocco cifrato si riapra.
+   Il controllo dei nomi in chiaro cerca ogni parola di almeno 5 lettere degli intestatari
+   dentro tutto il testo dello scatto, quindi **i nomi delle tre case sono esclusi**: un ospite
+   può chiamarsi come una casa, e `hotelId` sta su ogni prenotazione. Il 19 novembre 2026 un
+   cognome identico a un `hotelId` ha bloccato la pubblicazione per 2312 occorrenze che erano
+   tutte l'identificativo della casa. Se la verifica segnala una parola, **non pubblicare**
+   sulla fiducia: guarda in quali campi dello scatto compare. Se sta solo in campi che non
+   vengono dall'ospite è un falso positivo da correggere nel controllo; in ogni altro caso è
+   una fuga di dati e lo scatto non si pubblica.
 8. **Radar prezzi**: leggi il database dell'artifact Radar prezzi
    (`https://claude.ai/artifact/T5zW9i3ege9onzFs3VrNxB`) con ArtifactData, azione `list`,
    collezioni `rilevazioni` e `barometro`, `query.limit` 1000 e `out_dir` una cartella dello
@@ -87,7 +127,16 @@ scatto mostra le camere invece dei nomi e il controllo delle doppie prenotazioni
    salvo eliminazioni fatte dallo staff. Se l'artifact non risponde o lo script si ferma,
    **non toccare `radar.json`**: resta quello di ieri, e lo scatto si pubblica lo stesso.
 9. **Controllo dei tipi e costruzione**: `npm install && npm run check && npm run build`.
-   Se il controllo dei tipi non passa, non pubblicare.
+   **Se il controllo dei tipi non passa, non pubblicare.** Quello è il cancello.
+   Il container dell'attività pianificata però può non raggiungere `registry.npmjs.org`
+   (il 19 novembre 2026: `ENOTFOUND`, perché il registro è in `noProxy` e npm tenta la
+   connessione diretta; forzare il proxy è bloccato dal classificatore dei permessi). Senza
+   `npm install` manca `esbuild` e `npm run build` si ferma. In quel caso: se `npm run check`
+   passa — `tsc` è installato a livello globale e non serve il registro — **si pubblica
+   comunque**, perché `dist/` non entra nel repository e la costruzione che conta è quella
+   della CI. Dillo nel riepilogo e controlla che il workflow `pages.yml` finisca verde, con
+   `actions_list` su `pages.yml` e poi `actions_get` sul run: lì `npm install`, `npm run check`
+   e `npm run build` girano per davvero. Un run rosso va riportato subito.
 10. **Pubblica**: `git add scatola.json radar.json`, commit `Scatola G`, `git push origin HEAD:main`.
 11. **Riepilogo** in italiano, senza nomi: periodo coperto, prenotazioni per casa, notti in
     conflitto per casa, freschezza di La Scatola, rilevazioni del Radar e ultima data

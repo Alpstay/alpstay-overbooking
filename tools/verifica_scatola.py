@@ -87,6 +87,16 @@ def testi(v):
         return []
     return [str(v)]
 
+# I nomi delle tre case compaiono nello scatto per forza — `hotelId` sta su ogni prenotazione —
+# e un ospite può chiamarsi come una casa: il 19 novembre 2026 un intestatario aveva il cognome
+# identico a un `hotelId` e il controllo ha bloccato la pubblicazione per 2312 occorrenze che
+# erano tutte l'identificativo della casa. Quelle parole si escludono dal confronto: non
+# provano niente, perché nello scatto ci sono comunque. Vale solo per i nomi, mai per email,
+# telefoni o documenti, che nello scatto non devono comparire in nessuna forma.
+riservate = {c["hotelId"].strip().lower() for c in s["case"]}
+riservate |= {w.strip().lower() for c in s["case"] for w in re.split(r"[\s,]+", c["nome"] or "")}
+riservate.discard("")
+
 parole = set()
 righe = []
 for f in [x for x in ospiti_p.split(",") if x]:
@@ -96,7 +106,7 @@ for r in righe:
     for k in ("last_name", "first_name", "organization_name",
               "order_customer_last_name", "order_customer_first_name"):
         for w in re.split(r"[\s,]+", r.get(k) or ""):
-            if len(w) >= 5:
+            if len(w) >= 5 and w.lower() not in riservate:
                 parole.add(w.lower())
     for k in ("primary_email", "primary_phone_number", "identity_document", "vat_number",
               "company_email", "company_phone", "email", "phone", "mobile_phone",
