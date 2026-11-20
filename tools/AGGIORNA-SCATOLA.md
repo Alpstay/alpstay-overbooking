@@ -66,6 +66,16 @@ scatto mostra le camere invece dei nomi e il controllo delle doppie prenotazioni
    - Quello stesso `Invalid input` capita **a intermittenza** anche con un `limit` buono e un
      cursore valido: ritenta la stessa chiamata, passa. Non è un cursore scaduto e non sono i
      filtri sbagliati.
+   - Ma attenzione: se scarichi le tre case in parallelo, su `curated_reservation_contacts`
+     l'errore diventa **frequente e ostinato** — fino a 10 fallimenti di fila con cursore e
+     limit validi. I ritentativi a raffica non servono: è throttling travestito da errore di
+     validazione. Quello che funziona è **una pausa di 30-60 secondi** prima di ritentare.
+     Su questa vista conviene mettere una pausa breve tra le pagine dall'inizio, invece di
+     scoprirlo a metà paginazione. Accertato il 20 novembre 2026 su tutte e tre le case.
+   - Gli agenti paralleli **condividono lo scratchpad e la cartella `tool-results`**: i nomi
+     dei file di supporto vanno resi unici per casa, e il file grezzo si copia **dal percorso
+     esatto indicato nell'errore**, mai «il file più recente», che può essere di un'altra casa.
+     Il 20 novembre 2026 due agenti su tre ci sono inciampati; entrambi se ne sono accorti.
    - I cursori scadono in circa un'ora: non interrompere una paginazione a metà.
    - Quando il risultato è troppo grande per il contesto, l'errore dice dove è stato salvato il
      file grezzo: **copia quel file** nello scratchpad invece di ricopiare il JSON a mano. È
